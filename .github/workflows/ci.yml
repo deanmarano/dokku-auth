@@ -43,11 +43,6 @@ jobs:
           git clone https://github.com/bats-core/bats-core.git /tmp/bats-core
           cd /tmp/bats-core && sudo ./install.sh /usr/local
 
-      - name: Install BATS helpers
-        run: |
-          git clone https://github.com/bats-core/bats-support.git tests/test_helper/bats-support
-          git clone https://github.com/bats-core/bats-assert.git tests/test_helper/bats-assert
-
       - name: Run unit tests
         run: make test-unit
 
@@ -71,11 +66,6 @@ jobs:
         run: |
           git clone https://github.com/bats-core/bats-core.git /tmp/bats-core
           cd /tmp/bats-core && sudo ./install.sh /usr/local
-
-      - name: Install BATS helpers
-        run: |
-          git clone https://github.com/bats-core/bats-support.git tests/test_helper/bats-support
-          git clone https://github.com/bats-core/bats-assert.git tests/test_helper/bats-assert
 
       - name: Install plugin
         run: sudo dokku plugin:install file://$(pwd) auth
