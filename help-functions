@@ -130,6 +130,8 @@ route_help() {
       local SUBCOMMAND="${CMD#"${PLUGIN_COMMAND_PREFIX}":}"
       if [[ "$SUBCOMMAND" == *":help" ]] || [[ "$2" == "--help" ]] || [[ "$2" == "-h" ]]; then
         SUBCOMMAND="${SUBCOMMAND%:help}"
+        # Convert nested command format (oidc:add) to filename format (oidc-add)
+        SUBCOMMAND="${SUBCOMMAND//:/-}"
         show_subcommand_help "$SUBCOMMAND"
       else
         return 1 # Not a help request
