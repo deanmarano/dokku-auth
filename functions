@@ -11,6 +11,9 @@ fi
 # shellcheck source=log-functions
 source "$PLUGIN_BASE_PATH/log-functions"
 
+# shellcheck source=help-functions
+source "$PLUGIN_BASE_PATH/help-functions"
+
 # Check if a service exists
 service_exists() {
   local SERVICE="$1"
