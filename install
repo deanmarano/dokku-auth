@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+PLUGIN_BASE_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=config
+source "$PLUGIN_BASE_PATH/config"
+
+# shellcheck source=log-functions
+source "$PLUGIN_BASE_PATH/log-functions"
+
+main() {
+  dokku_log_info1 "Installing dokku-auth plugin..."
+
+  # Check dependencies
+  local MISSING_DEPS=()
+
+  for cmd in docker jq openssl curl; do
+    if ! command -v "$cmd" &>/dev/null; then
+      MISSING_DEPS+=("$cmd")
+    fi
+  done
+
+  if [[ ${#MISSING_DEPS[@]} -gt 0 ]]; then
+    dokku_log_warn "Missing required dependencies: ${MISSING_DEPS[*]}"
+    dokku_log_warn "Please install them before using the plugin"
+  fi
+
+  # Create plugin directories
+  dokku_log_info2 "Creating plugin directories..."
+  mkdir -p "$PLUGIN_DATA_ROOT"
+  mkdir -p "$PLUGIN_CONFIG_ROOT"
+
+  # Set permissions
+  if [[ -n "${DOKKU_SYSTEM_USER:-}" ]]; then
+    chown -R "${DOKKU_SYSTEM_USER}:${DOKKU_SYSTEM_GROUP:-$DOKKU_SYSTEM_USER}" "$PLUGIN_DATA_ROOT"
+    chown -R "${DOKKU_SYSTEM_USER}:${DOKKU_SYSTEM_GROUP:-$DOKKU_SYSTEM_USER}" "$PLUGIN_CONFIG_ROOT"
+  fi
+
+  # Make scripts executable
+  chmod +x "$PLUGIN_BASE_PATH/commands"
+  find "$PLUGIN_BASE_PATH/subcommands" -type f -exec chmod +x {} \; 2>/dev/null || true
+
+  dokku_log_info1 "dokku-auth plugin installed successfully!"
+  echo ""
+  echo "Get started with:"
+  echo "  dokku auth:create default"
+  echo ""
+  echo "For more information:"
+  echo "  dokku auth:help"
+}
+
+main "$@"

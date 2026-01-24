@@ -1,0 +1,233 @@
+#!/usr/bin/env bash
+# Shared utility functions for dokku-auth plugin
+
+# Ensure config is loaded
+if [[ -z "$PLUGIN_COMMAND_PREFIX" ]]; then
+  PLUGIN_BASE_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # shellcheck source=config
+  source "$PLUGIN_BASE_PATH/config"
+fi
+
+# shellcheck source=log-functions
+source "$PLUGIN_BASE_PATH/log-functions"
+
+# Check if a service exists
+service_exists() {
+  local SERVICE="$1"
+  [[ -d "$PLUGIN_DATA_ROOT/$SERVICE" ]]
+}
+
+# Get service root directory
+get_service_root() {
+  local SERVICE="$1"
+  echo "$PLUGIN_DATA_ROOT/$SERVICE"
+}
+
+# Get service data directory (for persistent storage)
+get_service_data_dir() {
+  local SERVICE="$1"
+  echo "$AUTH_DATA_ROOT/auth-$SERVICE"
+}
+
+# Get provider for a service
+get_service_provider() {
+  local SERVICE="$1"
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  if [[ -f "$SERVICE_ROOT/PROVIDER" ]]; then
+    cat "$SERVICE_ROOT/PROVIDER"
+  else
+    echo "$AUTH_DEFAULT_PROVIDER"
+  fi
+}
+
+# Load provider functions
+load_provider() {
+  local SERVICE="$1"
+  local PROVIDER
+  PROVIDER="$(get_service_provider "$SERVICE")"
+  local PROVIDER_PATH="$PLUGIN_BASE_PATH/providers/$PROVIDER/provider.sh"
+
+  if [[ ! -f "$PROVIDER_PATH" ]]; then
+    dokku_log_fail "Provider '$PROVIDER' not found at $PROVIDER_PATH"
+  fi
+
+  # shellcheck source=/dev/null
+  source "$PROVIDER_PATH"
+}
+
+# Get linked apps for a service
+get_linked_apps() {
+  local SERVICE="$1"
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+
+  if [[ -f "$SERVICE_ROOT/LINKS" ]]; then
+    cat "$SERVICE_ROOT/LINKS"
+  fi
+}
+
+# Check if app is linked to service
+is_app_linked() {
+  local SERVICE="$1"
+  local APP="$2"
+  get_linked_apps "$SERVICE" | grep -q "^${APP}$"
+}
+
+# Add app to links
+add_app_link() {
+  local SERVICE="$1"
+  local APP="$2"
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+
+  if ! is_app_linked "$SERVICE" "$APP"; then
+    echo "$APP" >>"$SERVICE_ROOT/LINKS"
+  fi
+}
+
+# Remove app from links
+remove_app_link() {
+  local SERVICE="$1"
+  local APP="$2"
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+
+  if [[ -f "$SERVICE_ROOT/LINKS" ]]; then
+    grep -v "^${APP}$" "$SERVICE_ROOT/LINKS" >"$SERVICE_ROOT/LINKS.tmp" || true
+    mv "$SERVICE_ROOT/LINKS.tmp" "$SERVICE_ROOT/LINKS"
+  fi
+}
+
+# Get protected apps for a service
+get_protected_apps() {
+  local SERVICE="$1"
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+
+  if [[ -f "$SERVICE_ROOT/PROTECTED_APPS" ]]; then
+    cat "$SERVICE_ROOT/PROTECTED_APPS"
+  fi
+}
+
+# Check if app is protected
+is_app_protected() {
+  local SERVICE="$1"
+  local APP="$2"
+  get_protected_apps "$SERVICE" | grep -q "^${APP}$"
+}
+
+# Generate random secret
+generate_secret() {
+  openssl rand -hex 32
+}
+
+# Generate random password
+generate_password() {
+  openssl rand -base64 24 | tr -d '/+=' | head -c 32
+}
+
+# Check if dokku app exists
+app_exists() {
+  local APP="$1"
+  dokku apps:exists "$APP" 2>/dev/null
+}
+
+# Get app domain
+get_app_domain() {
+  local APP="$1"
+  dokku domains:report "$APP" --domains-app-vhosts 2>/dev/null | head -n1
+}
+
+# Verify service exists or fail
+verify_service_exists() {
+  local SERVICE="$1"
+  if ! service_exists "$SERVICE"; then
+    dokku_log_fail "Service '$SERVICE' does not exist"
+  fi
+}
+
+# Verify service does not exist or fail
+verify_service_not_exists() {
+  local SERVICE="$1"
+  if service_exists "$SERVICE"; then
+    dokku_log_fail "Service '$SERVICE' already exists"
+  fi
+}
+
+# Verify app exists or fail
+verify_app_exists() {
+  local APP="$1"
+  if ! app_exists "$APP"; then
+    dokku_log_fail "App '$APP' does not exist"
+  fi
+}
+
+# Get LLDAP container name for service
+get_lldap_container() {
+  local SERVICE="$1"
+  echo "auth-${SERVICE}-lldap"
+}
+
+# Get Authelia container name for service
+get_authelia_container() {
+  local SERVICE="$1"
+  echo "auth-${SERVICE}-authelia"
+}
+
+# Get Redis container name for service
+get_redis_container() {
+  local SERVICE="$1"
+  echo "auth-${SERVICE}-redis"
+}
+
+# Get network name for service
+get_service_network() {
+  local SERVICE="$1"
+  echo "auth-${SERVICE}"
+}
+
+# Wait for container to be healthy
+wait_for_container() {
+  local CONTAINER="$1"
+  local TIMEOUT="${2:-60}"
+  local COUNT=0
+
+  while [[ $COUNT -lt $TIMEOUT ]]; do
+    if docker inspect --format='{{.State.Health.Status}}' "$CONTAINER" 2>/dev/null | grep -q "healthy"; then
+      return 0
+    fi
+    if docker inspect --format='{{.State.Status}}' "$CONTAINER" 2>/dev/null | grep -q "running"; then
+      # No health check, just check if running
+      if ! docker inspect --format='{{.State.Health}}' "$CONTAINER" 2>/dev/null | grep -q "Status"; then
+        return 0
+      fi
+    fi
+    sleep 1
+    COUNT=$((COUNT + 1))
+  done
+
+  return 1
+}
+
+# Get OIDC clients for a service
+get_oidc_clients() {
+  local SERVICE="$1"
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  local CLIENTS_DIR="$SERVICE_ROOT/oidc-clients"
+
+  if [[ -d "$CLIENTS_DIR" ]]; then
+    find "$CLIENTS_DIR" -name "*.yml" -exec basename {} .yml \;
+  fi
+}
+
+# Check if OIDC client exists
+oidc_client_exists() {
+  local SERVICE="$1"
+  local CLIENT="$2"
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+
+  [[ -f "$SERVICE_ROOT/oidc-clients/${CLIENT}.yml" ]]
+}

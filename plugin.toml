@@ -1,0 +1,4 @@
+[plugin]
+description = "dokku auth plugin for LDAP and authentication gateway management"
+version = "0.1.0"
+[plugin.config]

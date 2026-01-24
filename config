@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# Plugin configuration
+export PLUGIN_COMMAND_PREFIX="auth"
+export PLUGIN_SERVICE="Auth"
+export PLUGIN_VARIABLE="AUTH"
+export PLUGIN_DATA_ROOT="${PLUGIN_DATA_ROOT:-/var/lib/dokku/services/auth}"
+export PLUGIN_CONFIG_ROOT="${PLUGIN_CONFIG_ROOT:-/var/lib/dokku/config/auth}"
+
+# Default storage location for service data
+export AUTH_DATA_ROOT="${AUTH_DATA_ROOT:-/mnt/theta}"
+
+# Default provider
+export AUTH_DEFAULT_PROVIDER="${AUTH_DEFAULT_PROVIDER:-lldap}"
+
+# Default domain suffix
+export AUTH_DEFAULT_DOMAIN="${AUTH_DEFAULT_DOMAIN:-deanoftech.com}"
+
+# Docker network
+export AUTH_NETWORK_NAME="${AUTH_NETWORK_NAME:-shared}"
+
+# LLDAP defaults
+export LLDAP_DOCKER_IMAGE="${LLDAP_DOCKER_IMAGE:-lldap/lldap:stable}"
+export LLDAP_LDAP_PORT="${LLDAP_LDAP_PORT:-3890}"
+export LLDAP_WEB_PORT="${LLDAP_WEB_PORT:-17170}"
+
+# Authelia defaults
+export AUTHELIA_DOCKER_IMAGE="${AUTHELIA_DOCKER_IMAGE:-authelia/authelia:latest}"
+export AUTHELIA_PORT="${AUTHELIA_PORT:-9091}"
+
+# Plugin base path
+if [[ -z "$PLUGIN_BASE_PATH" ]]; then
+  if [[ -n "${BASH_SOURCE[0]}" ]]; then
+    PLUGIN_BASE_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  else
+    PLUGIN_BASE_PATH="/var/lib/dokku/plugins/available/auth"
+  fi
+fi
+export PLUGIN_BASE_PATH
+
+# Source dokku functions if available
+if [[ -f "$DOKKU_LIB_ROOT/functions" ]]; then
+  # shellcheck source=/dev/null
+  source "$DOKKU_LIB_ROOT/functions"
+fi

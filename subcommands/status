@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+status-cmd() {
+  #E show status of auth service containers
+  #E dokku auth:status default
+  #E dokku auth:status production
+  #A service, name of the auth service
+  declare desc="show status of auth service containers"
+
+  local SERVICE=""
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:status)
+        shift
+        ;;
+      -h | --help)
+        show_subcommand_help "status"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        SERVICE="$1"
+        shift
+        ;;
+    esac
+  done
+
+  # Validate required arguments
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  # Verify service exists
+  verify_service_exists "$SERVICE"
+
+  local LLDAP_CONTAINER
+  local AUTHELIA_CONTAINER
+
+  LLDAP_CONTAINER="$(get_lldap_container "$SERVICE")"
+  AUTHELIA_CONTAINER="$(get_authelia_container "$SERVICE")"
+
+  echo "Auth service '$SERVICE' status:"
+  echo ""
+
+  # Check LLDAP container
+  local LLDAP_STATUS="stopped"
+  local LLDAP_HEALTH=""
+
+  if docker ps --format '{{.Names}}' | grep -q "^${LLDAP_CONTAINER}$"; then
+    LLDAP_STATUS="running"
+    LLDAP_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' "$LLDAP_CONTAINER" 2>/dev/null || echo "")
+    if [[ -n "$LLDAP_HEALTH" ]]; then
+      LLDAP_STATUS="$LLDAP_STATUS ($LLDAP_HEALTH)"
+    fi
+  elif docker ps -a --format '{{.Names}}' | grep -q "^${LLDAP_CONTAINER}$"; then
+    LLDAP_STATUS="stopped"
+  else
+    LLDAP_STATUS="not found"
+  fi
+
+  printf "  %-25s %s\n" "LLDAP ($LLDAP_CONTAINER):" "$LLDAP_STATUS"
+
+  # Check Authelia container
+  local AUTHELIA_STATUS="stopped"
+  local AUTHELIA_HEALTH=""
+
+  if docker ps --format '{{.Names}}' | grep -q "^${AUTHELIA_CONTAINER}$"; then
+    AUTHELIA_STATUS="running"
+    AUTHELIA_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' "$AUTHELIA_CONTAINER" 2>/dev/null || echo "")
+    if [[ -n "$AUTHELIA_HEALTH" ]]; then
+      AUTHELIA_STATUS="$AUTHELIA_STATUS ($AUTHELIA_HEALTH)"
+    fi
+  elif docker ps -a --format '{{.Names}}' | grep -q "^${AUTHELIA_CONTAINER}$"; then
+    AUTHELIA_STATUS="stopped"
+  else
+    AUTHELIA_STATUS="not configured"
+  fi
+
+  printf "  %-25s %s\n" "Authelia ($AUTHELIA_CONTAINER):" "$AUTHELIA_STATUS"
+
+  # Show network status
+  local NETWORK
+  NETWORK="$(get_service_network "$SERVICE")"
+
+  echo ""
+  echo "Network:"
+  if docker network inspect "$NETWORK" &>/dev/null; then
+    local CONNECTED_CONTAINERS
+    CONNECTED_CONTAINERS=$(docker network inspect "$NETWORK" --format='{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null || echo "")
+    printf "  %-25s %s\n" "Network ($NETWORK):" "exists"
+    if [[ -n "$CONNECTED_CONTAINERS" ]]; then
+      printf "  %-25s %s\n" "Connected containers:" "$CONNECTED_CONTAINERS"
+    fi
+  else
+    printf "  %-25s %s\n" "Network ($NETWORK):" "not found"
+  fi
+
+  # Show linked apps
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  local LINKED_APPS
+  LINKED_APPS="$(get_linked_apps "$SERVICE")"
+
+  echo ""
+  echo "Linked apps:"
+  if [[ -n "$LINKED_APPS" ]]; then
+    echo "$LINKED_APPS" | while IFS= read -r APP; do
+      printf "  - %s\n" "$APP"
+    done
+  else
+    echo "  (none)"
+  fi
+
+  # Show protected apps
+  echo ""
+  echo "Protected apps:"
+  if [[ -d "$SERVICE_ROOT/protected-apps" ]]; then
+    local PROTECTED_COUNT=0
+    for PROTECT_DIR in "$SERVICE_ROOT/protected-apps"/*; do
+      [[ -d "$PROTECT_DIR" ]] || continue
+      PROTECTED_COUNT=$((PROTECTED_COUNT + 1))
+      local APP_NAME
+      APP_NAME="$(basename "$PROTECT_DIR")"
+      printf "  - %s\n" "$APP_NAME"
+    done
+    if [[ "$PROTECTED_COUNT" -eq 0 ]]; then
+      echo "  (none)"
+    fi
+  else
+    echo "  (none)"
+  fi
+
+  # Show OIDC clients count
+  echo ""
+  echo "OIDC clients:"
+  if [[ -d "$SERVICE_ROOT/oidc-clients" ]]; then
+    local CLIENT_COUNT=0
+    for CLIENT_DIR in "$SERVICE_ROOT/oidc-clients"/*; do
+      [[ -d "$CLIENT_DIR" ]] || continue
+      CLIENT_COUNT=$((CLIENT_COUNT + 1))
+      local CLIENT_ID
+      CLIENT_ID="$(basename "$CLIENT_DIR")"
+      printf "  - %s\n" "$CLIENT_ID"
+    done
+    if [[ "$CLIENT_COUNT" -eq 0 ]]; then
+      echo "  (none)"
+    fi
+  else
+    echo "  (none)"
+  fi
+}
+
+status-cmd "$@"

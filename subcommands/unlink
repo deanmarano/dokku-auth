@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+service-unlink-cmd() {
+  #E unlink the auth service from an app
+  #E dokku auth:unlink default myapp
+  #A service, name of the auth service
+  #A app, name of the app to unlink
+  #F --no-restart, don't restart the app after unlinking
+  #F --delete-group, delete the LDAP group for the app
+  declare desc="unlink the auth service from the app"
+
+  local SERVICE=""
+  local APP=""
+  local NO_RESTART=false
+  local DELETE_GROUP=false
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:unlink)
+        shift
+        ;;
+      --no-restart)
+        NO_RESTART=true
+        shift
+        ;;
+      --delete-group)
+        DELETE_GROUP=true
+        shift
+        ;;
+      -h | --help)
+        show_subcommand_help "unlink"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        if [[ -z "$SERVICE" ]]; then
+          SERVICE="$1"
+        elif [[ -z "$APP" ]]; then
+          APP="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  # Validate arguments
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  if [[ -z "$APP" ]]; then
+    dokku_log_fail "App name is required"
+  fi
+
+  # Check service exists
+  verify_service_exists "$SERVICE"
+
+  # Check app exists
+  verify_app_exists "$APP"
+
+  # Check if linked
+  if ! is_app_linked "$SERVICE" "$APP"; then
+    dokku_log_warn "App '$APP' is not linked to service '$SERVICE'"
+    return 0
+  fi
+
+  dokku_log_info1 "Unlinking $APP from auth service $SERVICE"
+
+  # Load provider
+  load_provider "$SERVICE"
+
+  # Remove LDAP environment variables
+  dokku_log_info2 "Removing LDAP environment variables..."
+  dokku config:unset --no-restart "$APP" \
+    LDAP_URL \
+    LDAP_BASE_DN \
+    LDAP_BIND_DN \
+    LDAP_BIND_PASSWORD \
+    LDAP_USER_FILTER \
+    LDAP_GROUP_FILTER \
+    AUTH_SERVICE 2>/dev/null || true
+
+  # Delete app group in LDAP (if requested)
+  if [[ "$DELETE_GROUP" == "true" ]]; then
+    dokku_log_info2 "Deleting LDAP group for app..."
+    if provider_delete_app_group "$SERVICE" "$APP"; then
+      dokku_log_verbose "Deleted group '${APP}_users'"
+    else
+      dokku_log_warn "Could not delete LDAP group"
+    fi
+  fi
+
+  # Remove from links file
+  remove_app_link "$SERVICE" "$APP"
+
+  # Restart app
+  if [[ "$NO_RESTART" != "true" ]]; then
+    dokku_log_info2 "Restarting app..."
+    dokku ps:restart "$APP"
+  else
+    dokku_log_verbose "Skipping restart (--no-restart)"
+    dokku_log_info2 "Restart the app to apply changes:"
+    echo "  dokku ps:restart $APP"
+  fi
+
+  dokku_log_info1 "App '$APP' unlinked from auth service '$SERVICE'"
+}
+
+service-unlink-cmd "$@"

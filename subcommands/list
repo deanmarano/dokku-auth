@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+service-list-cmd() {
+  #E list all auth services
+  #E dokku auth:list
+  #F -q|--quiet, only show service names
+  declare desc="list all auth services"
+
+  local QUIET=false
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:list)
+        shift
+        ;;
+      -q | --quiet)
+        QUIET=true
+        shift
+        ;;
+      -h | --help)
+        show_subcommand_help "list"
+        return 0
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  if [[ ! -d "$PLUGIN_DATA_ROOT" ]]; then
+    if [[ "$QUIET" != "true" ]]; then
+      dokku_log_warn "No auth services found"
+    fi
+    return 0
+  fi
+
+  local SERVICES
+  SERVICES=$(find "$PLUGIN_DATA_ROOT" -maxdepth 1 -mindepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
+
+  if [[ -z "$SERVICES" ]]; then
+    if [[ "$QUIET" != "true" ]]; then
+      dokku_log_warn "No auth services found"
+    fi
+    return 0
+  fi
+
+  if [[ "$QUIET" == "true" ]]; then
+    echo "$SERVICES"
+    return 0
+  fi
+
+  echo ""
+  echo "Auth services"
+  echo ""
+
+  while IFS= read -r SERVICE; do
+    local PROVIDER
+    local STATUS
+    local LINKED_COUNT
+
+    PROVIDER="$(get_service_provider "$SERVICE")"
+
+    # Check container status
+    load_provider "$SERVICE"
+    STATUS="$(provider_container_status "$SERVICE")"
+
+    # Count linked apps
+    LINKED_COUNT=$(get_linked_apps "$SERVICE" | wc -l | tr -d ' ')
+
+    printf "  %-20s %-10s %-10s %s linked app(s)\n" "$SERVICE" "($PROVIDER)" "[$STATUS]" "$LINKED_COUNT"
+  done <<<"$SERVICES"
+
+  echo ""
+}
+
+service-list-cmd "$@"

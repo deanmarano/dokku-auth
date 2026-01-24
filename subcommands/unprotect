@@ -1,0 +1,224 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+unprotect-cmd() {
+  #E remove forward auth protection from an app
+  #E dokku auth:unprotect default myapp
+  #A service, name of the auth service
+  #A app, name of the dokku app to unprotect
+  #F -f|--force, skip confirmation prompt
+  declare desc="remove forward auth protection from an app"
+
+  local SERVICE=""
+  local APP=""
+  local FORCE=false
+
+  # Parse arguments
+  local POSITIONAL=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:unprotect)
+        shift
+        ;;
+      -f | --force)
+        FORCE=true
+        shift
+        ;;
+      -h | --help)
+        show_subcommand_help "unprotect"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        POSITIONAL+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  # Extract positional arguments
+  SERVICE="${POSITIONAL[0]:-}"
+  APP="${POSITIONAL[1]:-}"
+
+  # Validate required arguments
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  if [[ -z "$APP" ]]; then
+    dokku_log_fail "App name is required"
+  fi
+
+  # Verify service exists
+  verify_service_exists "$SERVICE"
+
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  local PROTECT_DIR="$SERVICE_ROOT/protected-apps/$APP"
+
+  # Check if app is protected
+  if [[ ! -d "$PROTECT_DIR" ]]; then
+    dokku_log_fail "App '$APP' is not protected by service '$SERVICE'"
+  fi
+
+  # Confirmation prompt (unless forced)
+  if [[ "$FORCE" != "true" ]]; then
+    echo "This will remove forward auth protection from app '$APP'."
+    read -r -p "Are you sure? [y/N] " response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+      dokku_log_info1 "Aborted"
+      return 0
+    fi
+  fi
+
+  dokku_log_info1 "Removing protection from app '$APP'"
+
+  # Remove protection configuration
+  rm -rf "$PROTECT_DIR"
+
+  # Update Authelia access control rules
+  update_authelia_access_control "$SERVICE"
+
+  # Remove nginx forward auth configuration
+  remove_nginx_forward_auth "$APP"
+
+  dokku_log_info1 "Protection removed from app '$APP'"
+  echo ""
+  echo "Note: You may need to rebuild the app for changes to take effect:"
+  echo "  dokku ps:rebuild $APP"
+}
+
+update_authelia_access_control() {
+  local SERVICE="$1"
+  local SERVICE_ROOT
+  local DATA_DIR
+  local CONFIG_FILE
+
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  DATA_DIR="$(get_service_data_dir "$SERVICE")/authelia"
+  CONFIG_FILE="$DATA_DIR/configuration.yml"
+
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    return 0
+  fi
+
+  # Build access control rules from remaining protected apps
+  local RULES_YAML=""
+  local PROTECT_DIR
+
+  # Add gateway bypass rule first
+  local GATEWAY_DOMAIN
+  GATEWAY_DOMAIN="$(cat "$SERVICE_ROOT/gateway-config/DOMAIN" 2>/dev/null || echo "")"
+  if [[ -n "$GATEWAY_DOMAIN" ]]; then
+    RULES_YAML="    - domain: ${GATEWAY_DOMAIN}
+      policy: bypass"
+  fi
+
+  for PROTECT_DIR in "$SERVICE_ROOT/protected-apps"/*; do
+    [[ -d "$PROTECT_DIR" ]] || continue
+
+    local APP_NAME
+    APP_NAME="$(basename "$PROTECT_DIR")"
+
+    local POLICY="one_factor"
+    local REQUIRE_GROUP=""
+    local APP_BYPASS_PATHS=""
+
+    [[ -f "$PROTECT_DIR/POLICY" ]] && POLICY="$(cat "$PROTECT_DIR/POLICY")"
+    [[ -f "$PROTECT_DIR/REQUIRE_GROUP" ]] && REQUIRE_GROUP="$(cat "$PROTECT_DIR/REQUIRE_GROUP")"
+    [[ -f "$PROTECT_DIR/BYPASS_PATHS" ]] && APP_BYPASS_PATHS="$(cat "$PROTECT_DIR/BYPASS_PATHS")"
+
+    local APP_DOMAINS=""
+    if command -v dokku &>/dev/null; then
+      APP_DOMAINS=$(dokku domains:report "$APP_NAME" --domains-app-vhosts 2>/dev/null || echo "")
+    fi
+
+    if [[ -z "$APP_DOMAINS" ]]; then
+      APP_DOMAINS="${APP_NAME}.${AUTH_DEFAULT_DOMAIN}"
+    fi
+
+    # Add bypass rules first
+    if [[ -n "$APP_BYPASS_PATHS" ]]; then
+      while IFS= read -r BYPASS_PATH; do
+        for DOMAIN in $APP_DOMAINS; do
+          RULES_YAML="${RULES_YAML}
+    - domain: ${DOMAIN}
+      resources:
+        - '${BYPASS_PATH}'
+      policy: bypass"
+        done
+      done <<<"$APP_BYPASS_PATHS"
+    fi
+
+    # Add main protection rules
+    for DOMAIN in $APP_DOMAINS; do
+      RULES_YAML="${RULES_YAML}
+    - domain: ${DOMAIN}
+      policy: ${POLICY}"
+
+      if [[ -n "$REQUIRE_GROUP" ]]; then
+        RULES_YAML="${RULES_YAML}
+      subject:
+        - 'group:${REQUIRE_GROUP}'"
+      fi
+    done
+  done
+
+  # Add default wildcard rule
+  RULES_YAML="${RULES_YAML}
+    - domain: '*.${AUTH_DEFAULT_DOMAIN}'
+      policy: one_factor"
+
+  # Backup and update configuration
+  cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
+
+  python3 <<PYTHON_EOF
+import yaml
+
+with open('${CONFIG_FILE}', 'r') as f:
+    config = yaml.safe_load(f)
+
+rules_yaml = '''
+${RULES_YAML}
+'''
+
+rules_data = yaml.safe_load('rules:' + rules_yaml)
+if 'access_control' not in config:
+    config['access_control'] = {}
+config['access_control']['default_policy'] = 'deny'
+config['access_control']['rules'] = rules_data.get('rules', [])
+
+with open('${CONFIG_FILE}', 'w') as f:
+    yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+PYTHON_EOF
+
+  # Restart Authelia
+  local CONTAINER_NAME
+  CONTAINER_NAME="$(get_authelia_container "$SERVICE")"
+
+  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    dokku_log_verbose "Restarting Authelia to apply access control changes..."
+    docker restart "$CONTAINER_NAME" >/dev/null
+  fi
+}
+
+remove_nginx_forward_auth() {
+  local APP="$1"
+  local NGINX_INCLUDE_DIR="/home/dokku/$APP/nginx.conf.d"
+
+  # Remove forward auth snippets
+  rm -f "$NGINX_INCLUDE_DIR/auth.conf" 2>/dev/null || true
+  rm -f "$NGINX_INCLUDE_DIR/authelia-location.conf" 2>/dev/null || true
+
+  dokku_log_verbose "Removed nginx forward auth configuration"
+}
+
+unprotect-cmd "$@"

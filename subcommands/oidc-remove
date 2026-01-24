@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+oidc-remove-cmd() {
+  #E remove an OIDC client from an auth service
+  #E dokku auth:oidc:remove default myapp
+  #E dokku auth:oidc:remove production gitlab
+  #A service, name of the auth service
+  #A client_id, identifier of the OIDC client to remove
+  #F -f|--force, skip confirmation prompt
+  declare desc="remove an OIDC client from an auth service"
+
+  local SERVICE=""
+  local CLIENT_ID=""
+  local FORCE=false
+
+  # Parse arguments
+  local POSITIONAL=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:oidc:remove)
+        shift
+        ;;
+      -f | --force)
+        FORCE=true
+        shift
+        ;;
+      -h | --help)
+        show_subcommand_help "oidc-remove"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        POSITIONAL+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  # Extract positional arguments
+  SERVICE="${POSITIONAL[0]:-}"
+  CLIENT_ID="${POSITIONAL[1]:-}"
+
+  # Validate required arguments
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  if [[ -z "$CLIENT_ID" ]]; then
+    dokku_log_fail "Client ID is required"
+  fi
+
+  # Verify service exists
+  verify_service_exists "$SERVICE"
+
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  local CLIENT_DIR="$SERVICE_ROOT/oidc-clients/$CLIENT_ID"
+
+  # Check if client exists
+  if [[ ! -d "$CLIENT_DIR" ]]; then
+    dokku_log_fail "OIDC client '$CLIENT_ID' not found in service '$SERVICE'"
+  fi
+
+  # Confirmation prompt (unless forced)
+  if [[ "$FORCE" != "true" ]]; then
+    echo "This will remove the OIDC client '$CLIENT_ID' from service '$SERVICE'."
+    echo "Applications using this client will no longer be able to authenticate."
+    read -r -p "Are you sure? [y/N] " response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+      dokku_log_info1 "Aborted"
+      return 0
+    fi
+  fi
+
+  dokku_log_info1 "Removing OIDC client '$CLIENT_ID' from service '$SERVICE'"
+
+  # Remove client directory
+  rm -rf "$CLIENT_DIR"
+
+  # Update Authelia configuration
+  update_authelia_oidc_clients "$SERVICE"
+
+  dokku_log_info1 "OIDC client '$CLIENT_ID' removed successfully!"
+}
+
+update_authelia_oidc_clients() {
+  local SERVICE="$1"
+  local SERVICE_ROOT
+  local DATA_DIR
+  local CONFIG_FILE
+
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  DATA_DIR="$(get_service_data_dir "$SERVICE")/authelia"
+  CONFIG_FILE="$DATA_DIR/configuration.yml"
+
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    dokku_log_warn "Authelia configuration not found, skipping OIDC update"
+    return 0
+  fi
+
+  # Build clients YAML section
+  local CLIENTS_YAML=""
+  local CLIENT_DIR
+
+  for CLIENT_DIR in "$SERVICE_ROOT/oidc-clients"/*; do
+    [[ -d "$CLIENT_DIR" ]] || continue
+
+    local CLIENT_ID
+    CLIENT_ID="$(basename "$CLIENT_DIR")"
+
+    local REDIRECT_URI=""
+    local SCOPES=""
+    local IS_PUBLIC="false"
+    local REQUIRE_PKCE="false"
+    local CLIENT_SECRET=""
+
+    [[ -f "$CLIENT_DIR/REDIRECT_URI" ]] && REDIRECT_URI="$(cat "$CLIENT_DIR/REDIRECT_URI")"
+    [[ -f "$CLIENT_DIR/SCOPES" ]] && SCOPES="$(cat "$CLIENT_DIR/SCOPES")"
+    [[ -f "$CLIENT_DIR/IS_PUBLIC" ]] && IS_PUBLIC="$(cat "$CLIENT_DIR/IS_PUBLIC")"
+    [[ -f "$CLIENT_DIR/REQUIRE_PKCE" ]] && REQUIRE_PKCE="$(cat "$CLIENT_DIR/REQUIRE_PKCE")"
+    [[ -f "$CLIENT_DIR/SECRET" ]] && CLIENT_SECRET="$(cat "$CLIENT_DIR/SECRET")"
+
+    # Build client entry
+    CLIENTS_YAML="${CLIENTS_YAML}
+        - client_id: '${CLIENT_ID}'
+          client_name: '${CLIENT_ID}'"
+
+    if [[ "$IS_PUBLIC" == "true" ]]; then
+      CLIENTS_YAML="${CLIENTS_YAML}
+          public: true"
+    else
+      local SECRET_HASH
+      SECRET_HASH="\$plaintext\$${CLIENT_SECRET}"
+      CLIENTS_YAML="${CLIENTS_YAML}
+          client_secret: '${SECRET_HASH}'"
+    fi
+
+    if [[ "$REQUIRE_PKCE" == "true" ]]; then
+      CLIENTS_YAML="${CLIENTS_YAML}
+          require_pkce: true
+          pkce_challenge_method: S256"
+    fi
+
+    CLIENTS_YAML="${CLIENTS_YAML}
+          scopes:"
+    for SCOPE in $SCOPES; do
+      CLIENTS_YAML="${CLIENTS_YAML}
+            - ${SCOPE}"
+    done
+
+    CLIENTS_YAML="${CLIENTS_YAML}
+          redirect_uris:"
+    IFS=',' read -ra URIS <<<"$REDIRECT_URI"
+    for URI in "${URIS[@]}"; do
+      CLIENTS_YAML="${CLIENTS_YAML}
+            - '${URI}'"
+    done
+
+    CLIENTS_YAML="${CLIENTS_YAML}
+          authorization_policy: one_factor
+          consent_mode: implicit"
+  done
+
+  # Backup and update configuration
+  cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
+
+  python3 <<PYTHON_EOF
+import yaml
+
+with open('${CONFIG_FILE}', 'r') as f:
+    config = yaml.safe_load(f)
+
+clients_yaml = '''${CLIENTS_YAML}'''
+if clients_yaml.strip():
+    clients_data = yaml.safe_load('clients:' + clients_yaml)
+    if 'identity_providers' not in config:
+        config['identity_providers'] = {}
+    if 'oidc' not in config['identity_providers']:
+        config['identity_providers']['oidc'] = {}
+    config['identity_providers']['oidc']['clients'] = clients_data.get('clients', [])
+else:
+    if 'identity_providers' in config and 'oidc' in config['identity_providers']:
+        config['identity_providers']['oidc']['clients'] = []
+
+with open('${CONFIG_FILE}', 'w') as f:
+    yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+PYTHON_EOF
+
+  # Restart Authelia
+  local CONTAINER_NAME
+  CONTAINER_NAME="$(get_authelia_container "$SERVICE")"
+
+  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    dokku_log_verbose "Restarting Authelia to apply OIDC changes..."
+    docker restart "$CONTAINER_NAME" >/dev/null
+  fi
+}
+
+oidc-remove-cmd "$@"

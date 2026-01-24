@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+PLUGIN_BASE_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=config
+source "$PLUGIN_BASE_PATH/config"
+
+# shellcheck source=help-functions
+source "$PLUGIN_BASE_PATH/help-functions"
+
+# Main command dispatcher
+main() {
+  local CMD="$1"
+
+  # Handle empty command or help
+  if [[ -z "$CMD" ]] || [[ "$CMD" == "help" ]]; then
+    show_help
+    return 0
+  fi
+
+  # Handle help requests
+  if route_help "$@"; then
+    return 0
+  fi
+
+  # Extract subcommand from "auth:subcommand" format
+  if [[ "$CMD" == "${PLUGIN_COMMAND_PREFIX}:"* ]]; then
+    local SUBCOMMAND="${CMD#"${PLUGIN_COMMAND_PREFIX}":}"
+
+    # Handle nested subcommands (e.g., oidc:add -> oidc-add)
+    SUBCOMMAND="${SUBCOMMAND//:/-}"
+
+    local SUBCOMMAND_PATH="$PLUGIN_BASE_PATH/subcommands/$SUBCOMMAND"
+
+    if [[ -x "$SUBCOMMAND_PATH" ]]; then
+      shift # Remove the command from args
+      exec "$SUBCOMMAND_PATH" "$@"
+    else
+      echo "Unknown command: $CMD" >&2
+      echo "Run 'dokku ${PLUGIN_COMMAND_PREFIX}:help' for usage" >&2
+      return 1
+    fi
+  fi
+
+  # Handle "auth subcommand" format (without colon)
+  if [[ "$CMD" == "${PLUGIN_COMMAND_PREFIX}" ]]; then
+    shift
+    local SUBCOMMAND="$1"
+
+    if [[ -z "$SUBCOMMAND" ]]; then
+      show_help
+      return 0
+    fi
+
+    SUBCOMMAND="${SUBCOMMAND//:/-}"
+    local SUBCOMMAND_PATH="$PLUGIN_BASE_PATH/subcommands/$SUBCOMMAND"
+
+    if [[ -x "$SUBCOMMAND_PATH" ]]; then
+      shift # Remove subcommand from args
+      exec "$SUBCOMMAND_PATH" "${PLUGIN_COMMAND_PREFIX}:${SUBCOMMAND}" "$@"
+    fi
+  fi
+
+  return 1
+}
+
+main "$@"

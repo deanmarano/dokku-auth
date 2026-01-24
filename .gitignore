@@ -1,0 +1,16 @@
+# Test artifacts
+tests/tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Temporary files
+*.bak
+*.tmp

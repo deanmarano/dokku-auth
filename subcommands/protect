@@ -1,0 +1,312 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+protect-cmd() {
+  #E protect an app with forward auth
+  #E dokku auth:protect default myapp
+  #E dokku auth:protect default myapp --bypass-path /api/health
+  #E dokku auth:protect default myapp --require-group admin
+  #A service, name of the auth service
+  #A app, name of the dokku app to protect
+  #F --bypass-path <path>, path to bypass authentication (can be repeated)
+  #F --require-group <group>, require membership in LDAP group
+  #F --policy <policy>, access policy: one_factor, two_factor (default: one_factor)
+  declare desc="protect an app with forward auth"
+
+  local SERVICE=""
+  local APP=""
+  local BYPASS_PATHS=()
+  local REQUIRE_GROUP=""
+  local POLICY="one_factor"
+
+  # Parse arguments
+  local POSITIONAL=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:protect)
+        shift
+        ;;
+      --bypass-path)
+        BYPASS_PATHS+=("$2")
+        shift 2
+        ;;
+      --require-group)
+        REQUIRE_GROUP="$2"
+        shift 2
+        ;;
+      --policy)
+        POLICY="$2"
+        shift 2
+        ;;
+      -h | --help)
+        show_subcommand_help "protect"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        POSITIONAL+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  # Extract positional arguments
+  SERVICE="${POSITIONAL[0]:-}"
+  APP="${POSITIONAL[1]:-}"
+
+  # Validate required arguments
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  if [[ -z "$APP" ]]; then
+    dokku_log_fail "App name is required"
+  fi
+
+  # Verify service exists
+  verify_service_exists "$SERVICE"
+
+  # Get Authelia domain
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  local AUTHELIA_DOMAIN
+  AUTHELIA_DOMAIN="$(cat "$SERVICE_ROOT/gateway-config/DOMAIN" 2>/dev/null || echo "")"
+
+  if [[ -z "$AUTHELIA_DOMAIN" ]]; then
+    dokku_log_fail "Auth service '$SERVICE' does not have a gateway configured"
+  fi
+
+  dokku_log_info1 "Protecting app '$APP' with auth service '$SERVICE'"
+
+  # Store protection configuration
+  local PROTECT_DIR="$SERVICE_ROOT/protected-apps/$APP"
+  mkdir -p "$PROTECT_DIR"
+
+  echo "$POLICY" >"$PROTECT_DIR/POLICY"
+  [[ -n "$REQUIRE_GROUP" ]] && echo "$REQUIRE_GROUP" >"$PROTECT_DIR/REQUIRE_GROUP"
+
+  if [[ ${#BYPASS_PATHS[@]} -gt 0 ]]; then
+    printf '%s\n' "${BYPASS_PATHS[@]}" >"$PROTECT_DIR/BYPASS_PATHS"
+  fi
+
+  # Get app domains
+  local APP_DOMAINS
+  if command -v dokku &>/dev/null; then
+    APP_DOMAINS=$(dokku domains:report "$APP" --domains-app-vhosts 2>/dev/null || echo "")
+  fi
+
+  if [[ -z "$APP_DOMAINS" ]]; then
+    dokku_log_warn "Could not determine app domains"
+    dokku_log_warn "You may need to configure nginx manually"
+  fi
+
+  # Update Authelia access control rules
+  update_authelia_access_control "$SERVICE"
+
+  # Configure nginx forward auth
+  configure_nginx_forward_auth "$APP" "$AUTHELIA_DOMAIN" "$SERVICE"
+
+  dokku_log_info1 "App '$APP' is now protected!"
+  echo ""
+  echo "Protection configuration:"
+  echo "  Auth gateway:   https://$AUTHELIA_DOMAIN"
+  echo "  Policy:         $POLICY"
+  if [[ -n "$REQUIRE_GROUP" ]]; then
+    echo "  Required group: $REQUIRE_GROUP"
+  fi
+  if [[ ${#BYPASS_PATHS[@]} -gt 0 ]]; then
+    echo "  Bypass paths:   ${BYPASS_PATHS[*]}"
+  fi
+  echo ""
+  echo "Note: You may need to rebuild the app for changes to take effect:"
+  echo "  dokku ps:rebuild $APP"
+}
+
+update_authelia_access_control() {
+  local SERVICE="$1"
+  local SERVICE_ROOT
+  local DATA_DIR
+  local CONFIG_FILE
+
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  DATA_DIR="$(get_service_data_dir "$SERVICE")/authelia"
+  CONFIG_FILE="$DATA_DIR/configuration.yml"
+
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    dokku_log_warn "Authelia configuration not found"
+    return 0
+  fi
+
+  # Build access control rules from protected apps
+  local RULES_YAML=""
+  local PROTECT_DIR
+
+  # Add gateway bypass rule first
+  local GATEWAY_DOMAIN
+  GATEWAY_DOMAIN="$(cat "$SERVICE_ROOT/gateway-config/DOMAIN" 2>/dev/null || echo "")"
+  if [[ -n "$GATEWAY_DOMAIN" ]]; then
+    RULES_YAML="    - domain: ${GATEWAY_DOMAIN}
+      policy: bypass"
+  fi
+
+  for PROTECT_DIR in "$SERVICE_ROOT/protected-apps"/*; do
+    [[ -d "$PROTECT_DIR" ]] || continue
+
+    local APP_NAME
+    APP_NAME="$(basename "$PROTECT_DIR")"
+
+    local POLICY="one_factor"
+    local REQUIRE_GROUP=""
+    local APP_BYPASS_PATHS=""
+
+    [[ -f "$PROTECT_DIR/POLICY" ]] && POLICY="$(cat "$PROTECT_DIR/POLICY")"
+    [[ -f "$PROTECT_DIR/REQUIRE_GROUP" ]] && REQUIRE_GROUP="$(cat "$PROTECT_DIR/REQUIRE_GROUP")"
+    [[ -f "$PROTECT_DIR/BYPASS_PATHS" ]] && APP_BYPASS_PATHS="$(cat "$PROTECT_DIR/BYPASS_PATHS")"
+
+    # Get app domains if dokku is available
+    local APP_DOMAINS=""
+    if command -v dokku &>/dev/null; then
+      APP_DOMAINS=$(dokku domains:report "$APP_NAME" --domains-app-vhosts 2>/dev/null || echo "")
+    fi
+
+    if [[ -z "$APP_DOMAINS" ]]; then
+      APP_DOMAINS="${APP_NAME}.${AUTH_DEFAULT_DOMAIN}"
+    fi
+
+    # Add bypass rules first
+    if [[ -n "$APP_BYPASS_PATHS" ]]; then
+      while IFS= read -r BYPASS_PATH; do
+        for DOMAIN in $APP_DOMAINS; do
+          RULES_YAML="${RULES_YAML}
+    - domain: ${DOMAIN}
+      resources:
+        - '${BYPASS_PATH}'
+      policy: bypass"
+        done
+      done <<<"$APP_BYPASS_PATHS"
+    fi
+
+    # Add main protection rules
+    for DOMAIN in $APP_DOMAINS; do
+      RULES_YAML="${RULES_YAML}
+    - domain: ${DOMAIN}
+      policy: ${POLICY}"
+
+      if [[ -n "$REQUIRE_GROUP" ]]; then
+        RULES_YAML="${RULES_YAML}
+      subject:
+        - 'group:${REQUIRE_GROUP}'"
+      fi
+    done
+  done
+
+  # Add default wildcard rule
+  RULES_YAML="${RULES_YAML}
+    - domain: '*.${AUTH_DEFAULT_DOMAIN}'
+      policy: one_factor"
+
+  # Backup and update configuration
+  cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
+
+  python3 <<PYTHON_EOF
+import yaml
+
+with open('${CONFIG_FILE}', 'r') as f:
+    config = yaml.safe_load(f)
+
+rules_yaml = '''
+${RULES_YAML}
+'''
+
+rules_data = yaml.safe_load('rules:' + rules_yaml)
+if 'access_control' not in config:
+    config['access_control'] = {}
+config['access_control']['default_policy'] = 'deny'
+config['access_control']['rules'] = rules_data.get('rules', [])
+
+with open('${CONFIG_FILE}', 'w') as f:
+    yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+PYTHON_EOF
+
+  # Restart Authelia
+  local CONTAINER_NAME
+  CONTAINER_NAME="$(get_authelia_container "$SERVICE")"
+
+  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    dokku_log_verbose "Restarting Authelia to apply access control changes..."
+    docker restart "$CONTAINER_NAME" >/dev/null
+  fi
+}
+
+configure_nginx_forward_auth() {
+  local APP="$1"
+  local AUTHELIA_DOMAIN="$2"
+  local SERVICE="$3"
+
+  # Create nginx snippet for forward auth
+  local NGINX_INCLUDE_DIR="/home/dokku/$APP/nginx.conf.d"
+
+  if [[ ! -d "$NGINX_INCLUDE_DIR" ]]; then
+    mkdir -p "$NGINX_INCLUDE_DIR"
+    chown dokku:dokku "$NGINX_INCLUDE_DIR" 2>/dev/null || true
+  fi
+
+  local AUTH_SNIPPET="$NGINX_INCLUDE_DIR/auth.conf"
+
+  cat >"$AUTH_SNIPPET" <<EOF
+# Forward authentication to Authelia
+# Generated by dokku-auth plugin
+
+# Authelia auth request
+auth_request /authelia;
+auth_request_set \$target_url \$scheme://\$http_host\$request_uri;
+auth_request_set \$user \$upstream_http_remote_user;
+auth_request_set \$groups \$upstream_http_remote_groups;
+auth_request_set \$name \$upstream_http_remote_name;
+auth_request_set \$email \$upstream_http_remote_email;
+
+# Pass user info to upstream
+proxy_set_header Remote-User \$user;
+proxy_set_header Remote-Groups \$groups;
+proxy_set_header Remote-Name \$name;
+proxy_set_header Remote-Email \$email;
+
+# Error handling
+error_page 401 =302 https://${AUTHELIA_DOMAIN}/?rd=\$target_url;
+error_page 403 =302 https://${AUTHELIA_DOMAIN}/?rd=\$target_url;
+EOF
+
+  # Create authelia location snippet
+  local LOCATION_SNIPPET="$NGINX_INCLUDE_DIR/authelia-location.conf"
+
+  cat >"$LOCATION_SNIPPET" <<EOF
+# Authelia verification endpoint
+# Generated by dokku-auth plugin
+
+location /authelia {
+    internal;
+    proxy_pass https://${AUTHELIA_DOMAIN}/api/verify;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header X-Original-URL \$scheme://\$http_host\$request_uri;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-Host \$http_host;
+    proxy_set_header X-Forwarded-Uri \$request_uri;
+    proxy_set_header X-Forwarded-For \$remote_addr;
+}
+EOF
+
+  chown dokku:dokku "$AUTH_SNIPPET" "$LOCATION_SNIPPET" 2>/dev/null || true
+
+  dokku_log_verbose "Created nginx forward auth configuration"
+}
+
+protect-cmd "$@"

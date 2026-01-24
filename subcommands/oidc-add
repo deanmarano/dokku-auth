@@ -1,0 +1,262 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+oidc-add-cmd() {
+  #E add an OIDC client to an auth service
+  #E dokku auth:oidc:add default myapp --redirect-uri https://myapp.example.com/callback
+  #E dokku auth:oidc:add production gitlab --redirect-uri https://gitlab.example.com/users/auth/openid_connect/callback --secret mysecret
+  #A service, name of the auth service
+  #A client_id, unique identifier for the OIDC client
+  #F -r|--redirect-uri <uri>, redirect URI (required)
+  #F -s|--secret <secret>, client secret (auto-generated if not provided)
+  #F --public, create a public client (no secret required)
+  #F --pkce, require PKCE for this client
+  #F --scopes <scopes>, allowed scopes (default: openid profile email groups)
+  declare desc="add an OIDC client to an auth service"
+
+  local SERVICE=""
+  local CLIENT_ID=""
+  local REDIRECT_URI=""
+  local CLIENT_SECRET=""
+  local IS_PUBLIC=false
+  local REQUIRE_PKCE=false
+  local SCOPES="openid profile email groups"
+
+  # Parse arguments
+  local POSITIONAL=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:oidc:add)
+        shift
+        ;;
+      -r | --redirect-uri)
+        REDIRECT_URI="$2"
+        shift 2
+        ;;
+      -s | --secret)
+        CLIENT_SECRET="$2"
+        shift 2
+        ;;
+      --public)
+        IS_PUBLIC=true
+        shift
+        ;;
+      --pkce)
+        REQUIRE_PKCE=true
+        shift
+        ;;
+      --scopes)
+        SCOPES="$2"
+        shift 2
+        ;;
+      -h | --help)
+        show_subcommand_help "oidc-add"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        POSITIONAL+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  # Extract positional arguments
+  SERVICE="${POSITIONAL[0]:-}"
+  CLIENT_ID="${POSITIONAL[1]:-}"
+
+  # Validate required arguments
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  if [[ -z "$CLIENT_ID" ]]; then
+    dokku_log_fail "Client ID is required"
+  fi
+
+  if [[ -z "$REDIRECT_URI" ]]; then
+    dokku_log_fail "Redirect URI is required (use --redirect-uri)"
+  fi
+
+  # Verify service exists
+  verify_service_exists "$SERVICE"
+
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+
+  # Check if client already exists
+  if [[ -d "$SERVICE_ROOT/oidc-clients/$CLIENT_ID" ]]; then
+    dokku_log_fail "OIDC client '$CLIENT_ID' already exists for service '$SERVICE'"
+  fi
+
+  # Generate client secret if not provided and not public
+  if [[ "$IS_PUBLIC" != "true" ]] && [[ -z "$CLIENT_SECRET" ]]; then
+    CLIENT_SECRET="$(generate_password)"
+    dokku_log_info2 "Generated client secret"
+  fi
+
+  dokku_log_info1 "Adding OIDC client '$CLIENT_ID' to service '$SERVICE'"
+
+  # Create client directory
+  local CLIENT_DIR="$SERVICE_ROOT/oidc-clients/$CLIENT_ID"
+  mkdir -p "$CLIENT_DIR"
+
+  # Store client configuration
+  echo "$REDIRECT_URI" >"$CLIENT_DIR/REDIRECT_URI"
+  echo "$SCOPES" >"$CLIENT_DIR/SCOPES"
+  echo "$IS_PUBLIC" >"$CLIENT_DIR/IS_PUBLIC"
+  echo "$REQUIRE_PKCE" >"$CLIENT_DIR/REQUIRE_PKCE"
+
+  if [[ "$IS_PUBLIC" != "true" ]]; then
+    echo "$CLIENT_SECRET" >"$CLIENT_DIR/SECRET"
+    chmod 600 "$CLIENT_DIR/SECRET"
+  fi
+
+  # Update Authelia configuration
+  update_authelia_oidc_clients "$SERVICE"
+
+  dokku_log_info1 "OIDC client '$CLIENT_ID' added successfully!"
+  echo ""
+  echo "Client configuration:"
+  echo "  Client ID:     $CLIENT_ID"
+  if [[ "$IS_PUBLIC" != "true" ]]; then
+    echo "  Client Secret: $CLIENT_SECRET"
+  else
+    echo "  Client Type:   Public"
+  fi
+  echo "  Redirect URI:  $REDIRECT_URI"
+  echo "  Scopes:        $SCOPES"
+  if [[ "$REQUIRE_PKCE" == "true" ]]; then
+    echo "  PKCE:          Required"
+  fi
+}
+
+update_authelia_oidc_clients() {
+  local SERVICE="$1"
+  local SERVICE_ROOT
+  local DATA_DIR
+  local CONFIG_FILE
+
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  DATA_DIR="$(get_service_data_dir "$SERVICE")/authelia"
+  CONFIG_FILE="$DATA_DIR/configuration.yml"
+
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    dokku_log_warn "Authelia configuration not found, skipping OIDC update"
+    return 0
+  fi
+
+  # Build clients YAML section
+  local CLIENTS_YAML=""
+  local CLIENT_DIR
+
+  for CLIENT_DIR in "$SERVICE_ROOT/oidc-clients"/*; do
+    [[ -d "$CLIENT_DIR" ]] || continue
+
+    local CLIENT_ID
+    CLIENT_ID="$(basename "$CLIENT_DIR")"
+
+    local REDIRECT_URI=""
+    local SCOPES=""
+    local IS_PUBLIC="false"
+    local REQUIRE_PKCE="false"
+    local CLIENT_SECRET=""
+
+    [[ -f "$CLIENT_DIR/REDIRECT_URI" ]] && REDIRECT_URI="$(cat "$CLIENT_DIR/REDIRECT_URI")"
+    [[ -f "$CLIENT_DIR/SCOPES" ]] && SCOPES="$(cat "$CLIENT_DIR/SCOPES")"
+    [[ -f "$CLIENT_DIR/IS_PUBLIC" ]] && IS_PUBLIC="$(cat "$CLIENT_DIR/IS_PUBLIC")"
+    [[ -f "$CLIENT_DIR/REQUIRE_PKCE" ]] && REQUIRE_PKCE="$(cat "$CLIENT_DIR/REQUIRE_PKCE")"
+    [[ -f "$CLIENT_DIR/SECRET" ]] && CLIENT_SECRET="$(cat "$CLIENT_DIR/SECRET")"
+
+    # Build client entry
+    CLIENTS_YAML="${CLIENTS_YAML}
+        - client_id: '${CLIENT_ID}'
+          client_name: '${CLIENT_ID}'"
+
+    if [[ "$IS_PUBLIC" == "true" ]]; then
+      CLIENTS_YAML="${CLIENTS_YAML}
+          public: true"
+    else
+      # Hash the client secret using Authelia's format
+      local SECRET_HASH
+      SECRET_HASH="\$plaintext\$${CLIENT_SECRET}"
+      CLIENTS_YAML="${CLIENTS_YAML}
+          client_secret: '${SECRET_HASH}'"
+    fi
+
+    if [[ "$REQUIRE_PKCE" == "true" ]]; then
+      CLIENTS_YAML="${CLIENTS_YAML}
+          require_pkce: true
+          pkce_challenge_method: S256"
+    fi
+
+    # Add scopes
+    CLIENTS_YAML="${CLIENTS_YAML}
+          scopes:"
+    for SCOPE in $SCOPES; do
+      CLIENTS_YAML="${CLIENTS_YAML}
+            - ${SCOPE}"
+    done
+
+    # Add redirect URIs (can be comma-separated)
+    CLIENTS_YAML="${CLIENTS_YAML}
+          redirect_uris:"
+    IFS=',' read -ra URIS <<<"$REDIRECT_URI"
+    for URI in "${URIS[@]}"; do
+      CLIENTS_YAML="${CLIENTS_YAML}
+            - '${URI}'"
+    done
+
+    CLIENTS_YAML="${CLIENTS_YAML}
+          authorization_policy: one_factor
+          consent_mode: implicit"
+  done
+
+  # Update the configuration file - replace the clients section
+  # First, backup the config
+  cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
+
+  # Use Python for YAML manipulation since it's more reliable
+  python3 <<PYTHON_EOF
+import yaml
+import sys
+
+with open('${CONFIG_FILE}', 'r') as f:
+    config = yaml.safe_load(f)
+
+# Parse the clients YAML we built
+clients_yaml = '''${CLIENTS_YAML}'''
+if clients_yaml.strip():
+    clients_data = yaml.safe_load('clients:' + clients_yaml)
+    if 'identity_providers' not in config:
+        config['identity_providers'] = {}
+    if 'oidc' not in config['identity_providers']:
+        config['identity_providers']['oidc'] = {}
+    config['identity_providers']['oidc']['clients'] = clients_data.get('clients', [])
+else:
+    if 'identity_providers' in config and 'oidc' in config['identity_providers']:
+        config['identity_providers']['oidc']['clients'] = []
+
+with open('${CONFIG_FILE}', 'w') as f:
+    yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+PYTHON_EOF
+
+  # Restart Authelia to apply changes
+  local CONTAINER_NAME
+  CONTAINER_NAME="$(get_authelia_container "$SERVICE")"
+
+  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    dokku_log_verbose "Restarting Authelia to apply OIDC changes..."
+    docker restart "$CONTAINER_NAME" >/dev/null
+  fi
+}
+
+oidc-add-cmd "$@"

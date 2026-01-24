@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+service-destroy-cmd() {
+  #E delete an auth service and all its data
+  #E dokku auth:destroy default
+  #E dokku auth:destroy default --force
+  #A service, name of the auth service to destroy
+  #F -f|--force, skip confirmation prompt
+  #F --keep-data, keep persistent data (LDAP database, etc.)
+  declare desc="delete the auth service and optionally its data"
+
+  local SERVICE=""
+  local FORCE=false
+  local KEEP_DATA=false
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:destroy)
+        shift
+        ;;
+      -f | --force)
+        FORCE=true
+        shift
+        ;;
+      --keep-data)
+        KEEP_DATA=true
+        shift
+        ;;
+      -h | --help)
+        show_subcommand_help "destroy"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        SERVICE="$1"
+        shift
+        ;;
+    esac
+  done
+
+  # Validate service name
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  # Check if service exists
+  verify_service_exists "$SERVICE"
+
+  # Check for linked apps
+  local LINKED_APPS
+  LINKED_APPS="$(get_linked_apps "$SERVICE")"
+  if [[ -n "$LINKED_APPS" ]] && [[ "$FORCE" != "true" ]]; then
+    dokku_log_warn "Service '$SERVICE' has linked apps:"
+    echo "$LINKED_APPS" | sed 's/^/  /'
+    dokku_log_fail "Unlink apps first or use --force to destroy anyway"
+  fi
+
+  # Confirmation
+  if [[ "$FORCE" != "true" ]]; then
+    echo "This will destroy auth service '$SERVICE' and all its configuration."
+    if [[ "$KEEP_DATA" != "true" ]]; then
+      echo "Persistent data will also be deleted."
+    fi
+    echo ""
+    read -rp "Are you sure? (y/N) " CONFIRM
+    if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+      dokku_log_info1 "Aborted"
+      return 1
+    fi
+  fi
+
+  dokku_log_info1 "Destroying auth service '$SERVICE'"
+
+  local SERVICE_ROOT
+  local DATA_DIR
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  DATA_DIR="$(get_service_data_dir "$SERVICE")"
+
+  # Load provider for cleanup
+  load_provider "$SERVICE"
+
+  # Stop and remove containers
+  dokku_log_info2 "Stopping containers..."
+
+  # Authelia container
+  local AUTHELIA_CONTAINER
+  AUTHELIA_CONTAINER="$(get_authelia_container "$SERVICE")"
+  if docker ps -a --format '{{.Names}}' | grep -q "^${AUTHELIA_CONTAINER}$"; then
+    docker stop "$AUTHELIA_CONTAINER" 2>/dev/null || true
+    docker rm "$AUTHELIA_CONTAINER" 2>/dev/null || true
+    dokku_log_verbose "Removed Authelia container"
+  fi
+
+  # LDAP container
+  provider_destroy_container "$SERVICE"
+  dokku_log_verbose "Removed LDAP container"
+
+  # Redis container (if exists)
+  local REDIS_CONTAINER
+  REDIS_CONTAINER="$(get_redis_container "$SERVICE")"
+  if docker ps -a --format '{{.Names}}' | grep -q "^${REDIS_CONTAINER}$"; then
+    docker stop "$REDIS_CONTAINER" 2>/dev/null || true
+    docker rm "$REDIS_CONTAINER" 2>/dev/null || true
+    dokku_log_verbose "Removed Redis container"
+  fi
+
+  # Remove network
+  local NETWORK
+  NETWORK="$(get_service_network "$SERVICE")"
+  docker network rm "$NETWORK" 2>/dev/null || true
+
+  # Remove service configuration
+  dokku_log_info2 "Removing service configuration..."
+  rm -rf "$SERVICE_ROOT"
+
+  # Remove persistent data (unless --keep-data)
+  if [[ "$KEEP_DATA" != "true" ]]; then
+    dokku_log_info2 "Removing persistent data..."
+    rm -rf "$DATA_DIR"
+  else
+    dokku_log_verbose "Keeping persistent data at $DATA_DIR"
+  fi
+
+  dokku_log_info1 "Auth service '$SERVICE' destroyed"
+}
+
+service-destroy-cmd "$@"

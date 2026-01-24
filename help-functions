@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# Help system for dokku-auth plugin
+
+# Ensure config is loaded
+if [[ -z "$PLUGIN_COMMAND_PREFIX" ]]; then
+  PLUGIN_BASE_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # shellcheck source=config
+  source "$PLUGIN_BASE_PATH/config"
+fi
+
+# Show main help
+show_help() {
+  cat <<EOF
+usage: dokku ${PLUGIN_COMMAND_PREFIX}[:COMMAND]
+
+Manage auth services (LDAP + authentication gateway) for apps.
+
+Example:
+
+    \$ dokku ${PLUGIN_COMMAND_PREFIX}:list
+
+      Auth services
+      default (lldap)
+
+dokku ${PLUGIN_COMMAND_PREFIX} commands:
+
+    ${PLUGIN_COMMAND_PREFIX}:create <service>                         create an auth service
+    ${PLUGIN_COMMAND_PREFIX}:destroy <service> [-f|--force]           delete the auth service
+    ${PLUGIN_COMMAND_PREFIX}:info <service>                           print the service information
+    ${PLUGIN_COMMAND_PREFIX}:list                                     list all auth services
+    ${PLUGIN_COMMAND_PREFIX}:logs <service> [-t|--tail]               print the most recent log(s)
+    ${PLUGIN_COMMAND_PREFIX}:status <service> [-q|--quiet]            show service status
+    ${PLUGIN_COMMAND_PREFIX}:doctor <service> [-v|--verbose]          run diagnostics and check for issues
+
+    ${PLUGIN_COMMAND_PREFIX}:link <service> <app>                     link the auth service to the app
+    ${PLUGIN_COMMAND_PREFIX}:unlink <service> <app>                   unlink the auth service from the app
+
+    ${PLUGIN_COMMAND_PREFIX}:protect <app>                            protect app with forward auth
+    ${PLUGIN_COMMAND_PREFIX}:unprotect <app>                          remove forward auth from app
+
+    ${PLUGIN_COMMAND_PREFIX}:oidc:add <service> <client>              add an OIDC client
+    ${PLUGIN_COMMAND_PREFIX}:oidc:remove <service> <client>           remove an OIDC client
+    ${PLUGIN_COMMAND_PREFIX}:oidc:list <service>                      list OIDC clients
+
+    ${PLUGIN_COMMAND_PREFIX}:users:list <service>                     list LDAP users
+    ${PLUGIN_COMMAND_PREFIX}:users:sync <service>                     sync default group to app groups
+    ${PLUGIN_COMMAND_PREFIX}:groups:list <service>                    list LDAP groups
+
+    ${PLUGIN_COMMAND_PREFIX}:provider:set <service> <provider>        set the LDAP provider
+    ${PLUGIN_COMMAND_PREFIX}:provider:info <service>                  show provider configuration
+    ${PLUGIN_COMMAND_PREFIX}:provider:verify <service>                verify provider credentials
+
+EOF
+}
+
+# Show subcommand help
+show_subcommand_help() {
+  local SUBCOMMAND="$1"
+  local SUBCOMMAND_PATH="$PLUGIN_BASE_PATH/subcommands/$SUBCOMMAND"
+
+  if [[ ! -x "$SUBCOMMAND_PATH" ]]; then
+    echo "Unknown command: ${PLUGIN_COMMAND_PREFIX}:${SUBCOMMAND}" >&2
+    return 1
+  fi
+
+  # Extract help from docstrings
+  local DESC=""
+  local EXAMPLES=()
+  local ARGS=()
+  local FLAGS=()
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^[[:space:]]*declare[[:space:]]+desc= ]]; then
+      DESC="${line#*=}"
+      DESC="${DESC//\"/}"
+    elif [[ "$line" =~ ^[[:space:]]*\#E[[:space:]]+(.*) ]]; then
+      EXAMPLES+=("${BASH_REMATCH[1]}")
+    elif [[ "$line" =~ ^[[:space:]]*\#A[[:space:]]+(.*) ]]; then
+      ARGS+=("${BASH_REMATCH[1]}")
+    elif [[ "$line" =~ ^[[:space:]]*\#F[[:space:]]+(.*) ]]; then
+      FLAGS+=("${BASH_REMATCH[1]}")
+    fi
+  done <"$SUBCOMMAND_PATH"
+
+  echo "usage: dokku ${PLUGIN_COMMAND_PREFIX}:${SUBCOMMAND} [options] <args>"
+  echo ""
+
+  if [[ -n "$DESC" ]]; then
+    echo "$DESC"
+    echo ""
+  fi
+
+  if [[ ${#ARGS[@]} -gt 0 ]]; then
+    echo "Arguments:"
+    for arg in "${ARGS[@]}"; do
+      local name="${arg%%,*}"
+      local desc="${arg#*, }"
+      printf "  %-20s %s\n" "$name" "$desc"
+    done
+    echo ""
+  fi
+
+  if [[ ${#FLAGS[@]} -gt 0 ]]; then
+    echo "Options:"
+    for flag in "${FLAGS[@]}"; do
+      local name="${flag%%,*}"
+      local desc="${flag#*, }"
+      printf "  %-20s %s\n" "$name" "$desc"
+    done
+    echo ""
+  fi
+
+  if [[ ${#EXAMPLES[@]} -gt 0 ]]; then
+    echo "Examples:"
+    for example in "${EXAMPLES[@]}"; do
+      echo "  $example"
+    done
+  fi
+}
+
+# Route help requests
+route_help() {
+  local CMD="$1"
+
+  case "$CMD" in
+    "" | "help" | "${PLUGIN_COMMAND_PREFIX}" | "${PLUGIN_COMMAND_PREFIX}:help")
+      show_help
+      ;;
+    "${PLUGIN_COMMAND_PREFIX}:"*)
+      local SUBCOMMAND="${CMD#"${PLUGIN_COMMAND_PREFIX}":}"
+      if [[ "$SUBCOMMAND" == *":help" ]] || [[ "$2" == "--help" ]] || [[ "$2" == "-h" ]]; then
+        SUBCOMMAND="${SUBCOMMAND%:help}"
+        show_subcommand_help "$SUBCOMMAND"
+      else
+        return 1 # Not a help request
+      fi
+      ;;
+    *)
+      return 1 # Not a help request
+      ;;
+  esac
+
+  return 0
+}

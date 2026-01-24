@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+oidc-list-cmd() {
+  #E list OIDC clients for an auth service
+  #E dokku auth:oidc:list default
+  #E dokku auth:oidc:list production --quiet
+  #A service, name of the auth service
+  #F -q|--quiet, only show client IDs
+  declare desc="list OIDC clients for an auth service"
+
+  local SERVICE=""
+  local QUIET=false
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:oidc:list)
+        shift
+        ;;
+      -q | --quiet)
+        QUIET=true
+        shift
+        ;;
+      -h | --help)
+        show_subcommand_help "oidc-list"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        SERVICE="$1"
+        shift
+        ;;
+    esac
+  done
+
+  # Validate required arguments
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  # Verify service exists
+  verify_service_exists "$SERVICE"
+
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  local OIDC_DIR="$SERVICE_ROOT/oidc-clients"
+
+  # Check if there are any clients
+  local CLIENT_COUNT=0
+  if [[ -d "$OIDC_DIR" ]]; then
+    CLIENT_COUNT=$(find "$OIDC_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+  fi
+
+  if [[ "$CLIENT_COUNT" -eq 0 ]]; then
+    if [[ "$QUIET" != "true" ]]; then
+      echo "No OIDC clients configured for service '$SERVICE'"
+    fi
+    return 0
+  fi
+
+  # List clients
+  if [[ "$QUIET" == "true" ]]; then
+    for CLIENT_DIR in "$OIDC_DIR"/*; do
+      [[ -d "$CLIENT_DIR" ]] || continue
+      basename "$CLIENT_DIR"
+    done
+  else
+    echo "OIDC clients for service '$SERVICE':"
+    echo ""
+    printf "%-20s %-10s %-50s\n" "CLIENT ID" "TYPE" "REDIRECT URI"
+    printf "%-20s %-10s %-50s\n" "---------" "----" "------------"
+
+    for CLIENT_DIR in "$OIDC_DIR"/*; do
+      [[ -d "$CLIENT_DIR" ]] || continue
+
+      local CLIENT_ID
+      CLIENT_ID="$(basename "$CLIENT_DIR")"
+
+      local REDIRECT_URI=""
+      local IS_PUBLIC="false"
+
+      [[ -f "$CLIENT_DIR/REDIRECT_URI" ]] && REDIRECT_URI="$(cat "$CLIENT_DIR/REDIRECT_URI")"
+      [[ -f "$CLIENT_DIR/IS_PUBLIC" ]] && IS_PUBLIC="$(cat "$CLIENT_DIR/IS_PUBLIC")"
+
+      local CLIENT_TYPE="confidential"
+      if [[ "$IS_PUBLIC" == "true" ]]; then
+        CLIENT_TYPE="public"
+      fi
+
+      # Truncate redirect URI if too long
+      local DISPLAY_URI="$REDIRECT_URI"
+      if [[ ${#DISPLAY_URI} -gt 47 ]]; then
+        DISPLAY_URI="${DISPLAY_URI:0:44}..."
+      fi
+
+      printf "%-20s %-10s %-50s\n" "$CLIENT_ID" "$CLIENT_TYPE" "$DISPLAY_URI"
+    done
+    echo ""
+    echo "Total: $CLIENT_COUNT client(s)"
+  fi
+}
+
+oidc-list-cmd "$@"

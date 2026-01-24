@@ -1,0 +1,250 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+service-create-cmd() {
+  #E create an auth service with LDAP and authentication gateway
+  #E dokku auth:create default
+  #E dokku auth:create --provider lldap production
+  #A service, name of the auth service to create
+  #F -p|--provider <provider>, LDAP provider to use (default: lldap)
+  #F --skip-gateway, skip Authelia gateway setup
+  #F --gateway-domain <domain>, domain for the auth gateway
+  declare desc="create an auth service with LDAP and authentication gateway"
+
+  local SERVICE=""
+  local PROVIDER="$AUTH_DEFAULT_PROVIDER"
+  local SKIP_GATEWAY=false
+  local GATEWAY_DOMAIN=""
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:create)
+        shift
+        ;;
+      -p | --provider)
+        PROVIDER="$2"
+        shift 2
+        ;;
+      --skip-gateway)
+        SKIP_GATEWAY=true
+        shift
+        ;;
+      --gateway-domain)
+        GATEWAY_DOMAIN="$2"
+        shift 2
+        ;;
+      -h | --help)
+        show_subcommand_help "create"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        SERVICE="$1"
+        shift
+        ;;
+    esac
+  done
+
+  # Validate service name
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  # Check if service already exists
+  verify_service_not_exists "$SERVICE"
+
+  # Validate provider
+  if [[ ! -d "$PLUGIN_BASE_PATH/providers/$PROVIDER" ]]; then
+    dokku_log_fail "Unknown provider: $PROVIDER"
+  fi
+
+  dokku_log_info1 "Creating auth service '$SERVICE' with provider '$PROVIDER'"
+
+  # Create service directory structure
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  mkdir -p "$SERVICE_ROOT"/{provider-config,oidc-clients,gateway-config}
+
+  # Store provider
+  echo "$PROVIDER" >"$SERVICE_ROOT/PROVIDER"
+
+  # Load provider
+  load_provider "$SERVICE"
+
+  # Create LDAP container
+  dokku_log_info2 "Creating LDAP container..."
+  if provider_create_container "$SERVICE"; then
+    dokku_log_verbose "LDAP container created successfully"
+  else
+    dokku_log_fail "Failed to create LDAP container"
+  fi
+
+  # Wait for LDAP to be ready
+  dokku_log_verbose "Waiting for LDAP to be ready..."
+  local LLDAP_CONTAINER
+  LLDAP_CONTAINER="$(get_lldap_container "$SERVICE")"
+  if ! wait_for_container "$LLDAP_CONTAINER" 60; then
+    dokku_log_warn "LDAP container may not be fully ready"
+  fi
+
+  # Create Authelia gateway (unless skipped)
+  if [[ "$SKIP_GATEWAY" != "true" ]]; then
+    dokku_log_info2 "Creating authentication gateway..."
+    create_authelia_gateway "$SERVICE" "$GATEWAY_DOMAIN"
+  fi
+
+  # Create default group for app users
+  dokku_log_info2 "Creating default user group..."
+  sleep 5 # Give LLDAP time to fully initialize
+  provider_create_app_group "$SERVICE" "dokku-ldap-default" || true
+
+  dokku_log_info1 "Auth service '$SERVICE' created successfully!"
+  echo ""
+  echo "Service information:"
+  echo "  LDAP container:    $(get_lldap_container "$SERVICE")"
+  if [[ "$SKIP_GATEWAY" != "true" ]]; then
+    echo "  Gateway container: $(get_authelia_container "$SERVICE")"
+  fi
+  echo ""
+  echo "Next steps:"
+  echo "  1. Access LLDAP web UI to create users"
+  echo "  2. Link apps: dokku auth:link $SERVICE <app>"
+  echo "  3. Add OIDC clients: dokku auth:oidc:add $SERVICE <client>"
+}
+
+create_authelia_gateway() {
+  local SERVICE="$1"
+  local GATEWAY_DOMAIN="$2"
+  local SERVICE_ROOT
+  local DATA_DIR
+  local CONTAINER_NAME
+  local NETWORK
+  local LLDAP_CONTAINER
+
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  DATA_DIR="$(get_service_data_dir "$SERVICE")/authelia"
+  CONTAINER_NAME="$(get_authelia_container "$SERVICE")"
+  NETWORK="$(get_service_network "$SERVICE")"
+  LLDAP_CONTAINER="$(get_lldap_container "$SERVICE")"
+
+  if [[ -z "$GATEWAY_DOMAIN" ]]; then
+    GATEWAY_DOMAIN="auth-${SERVICE}.${AUTH_DEFAULT_DOMAIN}"
+  fi
+
+  # Generate secrets
+  local JWT_SECRET
+  local SESSION_SECRET
+  local STORAGE_KEY
+  local OIDC_HMAC_SECRET
+
+  JWT_SECRET="$(generate_secret)"
+  SESSION_SECRET="$(generate_secret)"
+  STORAGE_KEY="$(generate_secret)"
+  OIDC_HMAC_SECRET="$(generate_secret)"
+
+  # Store gateway config
+  echo "$GATEWAY_DOMAIN" >"$SERVICE_ROOT/gateway-config/DOMAIN"
+  echo "$JWT_SECRET" >"$SERVICE_ROOT/gateway-config/JWT_SECRET"
+  echo "$SESSION_SECRET" >"$SERVICE_ROOT/gateway-config/SESSION_SECRET"
+  echo "$STORAGE_KEY" >"$SERVICE_ROOT/gateway-config/STORAGE_KEY"
+  echo "$OIDC_HMAC_SECRET" >"$SERVICE_ROOT/gateway-config/OIDC_HMAC_SECRET"
+  chmod 600 "$SERVICE_ROOT/gateway-config"/*
+
+  # Create data directory
+  mkdir -p "$DATA_DIR"
+
+  # Get LDAP config
+  local LDAP_BASE_DN
+  local LDAP_PASSWORD
+  LDAP_BASE_DN="$(cat "$SERVICE_ROOT/provider-config/BASE_DN")"
+  LDAP_PASSWORD="$(cat "$SERVICE_ROOT/provider-config/ADMIN_PASSWORD")"
+
+  # Generate OIDC JWKS key
+  openssl genrsa 4096 2>/dev/null >"$DATA_DIR/oidc_jwks.pem"
+  chmod 600 "$DATA_DIR/oidc_jwks.pem"
+
+  # Create configuration file
+  cat >"$DATA_DIR/configuration.yml" <<EOF
+  # Authelia Configuration for service: $SERVICE
+  # Generated by dokku-auth plugin
+
+  theme: auto
+  default_2fa_method: ""
+
+  server:
+    address: "tcp://0.0.0.0:9091"
+
+  log:
+    level: info
+
+  totp:
+    issuer: ${AUTH_DEFAULT_DOMAIN}
+
+  webauthn:
+    display_name: ${AUTH_DEFAULT_DOMAIN}
+
+  session:
+    cookies:
+      - domain: ${AUTH_DEFAULT_DOMAIN}
+        authelia_url: https://${GATEWAY_DOMAIN}
+        default_redirection_url: https://${AUTH_DEFAULT_DOMAIN}
+
+  storage:
+    local:
+      path: /config/db.sqlite3
+
+  notifier:
+    filesystem:
+      filename: /config/notifications.txt
+
+  access_control:
+    default_policy: deny
+    rules:
+      - domain: ${GATEWAY_DOMAIN}
+        policy: bypass
+      - domain: "*.${AUTH_DEFAULT_DOMAIN}"
+        policy: one_factor
+
+  authentication_backend:
+    ldap:
+      address: ldap://${LLDAP_CONTAINER}:3890
+      base_dn: ${LDAP_BASE_DN}
+      user: uid=admin,ou=people,${LDAP_BASE_DN}
+      password: ${LDAP_PASSWORD}
+      users_filter: "(&(|({username_attribute}={input})({mail_attribute}={input}))(objectClass=person))"
+      groups_filter: "(member={dn})"
+      attributes:
+        username: uid
+        mail: mail
+        display_name: displayName
+        group_name: cn
+
+  identity_providers:
+    oidc:
+      hmac_secret: '${OIDC_HMAC_SECRET}'
+      jwks:
+        - key: |
+$(sed 's/^/            /' "$DATA_DIR/oidc_jwks.pem")
+      clients: []
+EOF
+
+  # Run Authelia container
+  docker run -d \
+    --name "$CONTAINER_NAME" \
+    --network "$NETWORK" \
+    --restart unless-stopped \
+    -v "${DATA_DIR}:/config" \
+    -e "TZ=${TZ:-America/New_York}" \
+    "$AUTHELIA_DOCKER_IMAGE"
+}
+
+service-create-cmd "$@"

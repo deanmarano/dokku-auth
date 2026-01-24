@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+service-info-cmd() {
+  #E print the service information
+  #E dokku auth:info default
+  #A service, name of the auth service
+  #F --show-password, show LDAP admin password
+  declare desc="print the service information"
+
+  local SERVICE=""
+  local SHOW_PASSWORD=false
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:info)
+        shift
+        ;;
+      --show-password)
+        SHOW_PASSWORD=true
+        shift
+        ;;
+      -h | --help)
+        show_subcommand_help "info"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        SERVICE="$1"
+        shift
+        ;;
+    esac
+  done
+
+  # Validate service name
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  # Check if service exists
+  verify_service_exists "$SERVICE"
+
+  local SERVICE_ROOT
+  local DATA_DIR
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+  DATA_DIR="$(get_service_data_dir "$SERVICE")"
+
+  # Load provider
+  load_provider "$SERVICE"
+
+  local PROVIDER
+  local LLDAP_CONTAINER
+  local AUTHELIA_CONTAINER
+  local LLDAP_STATUS
+  local AUTHELIA_STATUS
+  local BASE_DN
+  local GATEWAY_DOMAIN
+
+  PROVIDER="$(get_service_provider "$SERVICE")"
+  LLDAP_CONTAINER="$(get_lldap_container "$SERVICE")"
+  AUTHELIA_CONTAINER="$(get_authelia_container "$SERVICE")"
+  LLDAP_STATUS="$(provider_container_status "$SERVICE")"
+  AUTHELIA_STATUS="$(docker inspect --format='{{.State.Status}}' "$AUTHELIA_CONTAINER" 2>/dev/null || echo "not found")"
+
+  if [[ -f "$SERVICE_ROOT/provider-config/BASE_DN" ]]; then
+    BASE_DN="$(cat "$SERVICE_ROOT/provider-config/BASE_DN")"
+  else
+    BASE_DN="(not configured)"
+  fi
+
+  if [[ -f "$SERVICE_ROOT/gateway-config/DOMAIN" ]]; then
+    GATEWAY_DOMAIN="$(cat "$SERVICE_ROOT/gateway-config/DOMAIN")"
+  else
+    GATEWAY_DOMAIN="(not configured)"
+  fi
+
+  echo "=====> $SERVICE auth service information"
+  echo "       Provider:            $PROVIDER"
+  echo "       Config directory:    $SERVICE_ROOT"
+  echo "       Data directory:      $DATA_DIR"
+  echo ""
+  echo "       LDAP Configuration:"
+  echo "       LDAP container:      $LLDAP_CONTAINER"
+  echo "       LDAP status:         $LLDAP_STATUS"
+  echo "       LDAP base DN:        $BASE_DN"
+  echo "       LDAP admin user:     uid=admin,ou=people,$BASE_DN"
+
+  if [[ "$SHOW_PASSWORD" == "true" ]] && [[ -f "$SERVICE_ROOT/provider-config/ADMIN_PASSWORD" ]]; then
+    echo "       LDAP admin password: $(cat "$SERVICE_ROOT/provider-config/ADMIN_PASSWORD")"
+  else
+    echo "       LDAP admin password: (use --show-password to reveal)"
+  fi
+
+  echo ""
+  echo "       Gateway Configuration:"
+  echo "       Gateway container:   $AUTHELIA_CONTAINER"
+  echo "       Gateway status:      $AUTHELIA_STATUS"
+  echo "       Gateway domain:      $GATEWAY_DOMAIN"
+  echo "       OIDC issuer:         https://$GATEWAY_DOMAIN"
+  echo ""
+
+  # Linked apps
+  local LINKED_APPS
+  LINKED_APPS="$(get_linked_apps "$SERVICE")"
+  if [[ -n "$LINKED_APPS" ]]; then
+    echo "       Linked apps:"
+    echo "$LINKED_APPS" | sed 's/^/         /'
+  else
+    echo "       Linked apps:         (none)"
+  fi
+  echo ""
+
+  # OIDC clients
+  local OIDC_CLIENTS
+  OIDC_CLIENTS="$(get_oidc_clients "$SERVICE")"
+  if [[ -n "$OIDC_CLIENTS" ]]; then
+    echo "       OIDC clients:"
+    echo "$OIDC_CLIENTS" | sed 's/^/         /'
+  else
+    echo "       OIDC clients:        (none)"
+  fi
+  echo ""
+
+  # Protected apps
+  local PROTECTED_APPS
+  PROTECTED_APPS="$(get_protected_apps "$SERVICE")"
+  if [[ -n "$PROTECTED_APPS" ]]; then
+    echo "       Protected apps (forward auth):"
+    echo "$PROTECTED_APPS" | sed 's/^/         /'
+  else
+    echo "       Protected apps:      (none)"
+  fi
+}
+
+service-info-cmd "$@"

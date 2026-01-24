@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+service-link-cmd() {
+  #E link the auth service to an app
+  #E dokku auth:link default myapp
+  #A service, name of the auth service
+  #A app, name of the app to link
+  #F --no-restart, don't restart the app after linking
+  #F --create-group, create an LDAP group for the app
+  declare desc="link the auth service to the app"
+
+  local SERVICE=""
+  local APP=""
+  local NO_RESTART=false
+  local CREATE_GROUP=true
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:link)
+        shift
+        ;;
+      --no-restart)
+        NO_RESTART=true
+        shift
+        ;;
+      --no-group)
+        CREATE_GROUP=false
+        shift
+        ;;
+      --create-group)
+        CREATE_GROUP=true
+        shift
+        ;;
+      -h | --help)
+        show_subcommand_help "link"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        if [[ -z "$SERVICE" ]]; then
+          SERVICE="$1"
+        elif [[ -z "$APP" ]]; then
+          APP="$1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  # Validate arguments
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  if [[ -z "$APP" ]]; then
+    dokku_log_fail "App name is required"
+  fi
+
+  # Check service exists
+  verify_service_exists "$SERVICE"
+
+  # Check app exists
+  verify_app_exists "$APP"
+
+  # Check if already linked
+  if is_app_linked "$SERVICE" "$APP"; then
+    dokku_log_warn "App '$APP' is already linked to service '$SERVICE'"
+    return 0
+  fi
+
+  dokku_log_info1 "Linking $APP to auth service $SERVICE"
+
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+
+  # Load provider
+  load_provider "$SERVICE"
+
+  # Get LDAP config
+  local BASE_DN
+  local LLDAP_CONTAINER
+  local ADMIN_PASSWORD
+  local NETWORK
+
+  BASE_DN="$(cat "$SERVICE_ROOT/provider-config/BASE_DN")"
+  LLDAP_CONTAINER="$(get_lldap_container "$SERVICE")"
+  ADMIN_PASSWORD="$(cat "$SERVICE_ROOT/provider-config/ADMIN_PASSWORD")"
+  NETWORK="$(get_service_network "$SERVICE")"
+
+  # Connect app to service network
+  dokku_log_info2 "Connecting app to auth network..."
+  dokku network:set "$APP" attach-post-create "$NETWORK" 2>/dev/null || true
+
+  # Set LDAP environment variables
+  dokku_log_info2 "Setting LDAP environment variables..."
+  dokku config:set --no-restart "$APP" \
+    LDAP_URL="ldap://${LLDAP_CONTAINER}:3890" \
+    LDAP_BASE_DN="$BASE_DN" \
+    LDAP_BIND_DN="uid=admin,ou=people,${BASE_DN}" \
+    LDAP_BIND_PASSWORD="$ADMIN_PASSWORD" \
+    LDAP_USER_FILTER="(&(|(uid={input})(mail={input}))(objectClass=person))" \
+    LDAP_GROUP_FILTER="(member={dn})" \
+    AUTH_SERVICE="$SERVICE"
+
+  # Create app group in LDAP
+  if [[ "$CREATE_GROUP" == "true" ]]; then
+    dokku_log_info2 "Creating LDAP group for app..."
+    if provider_create_app_group "$SERVICE" "$APP"; then
+      dokku_log_verbose "Created group '${APP}_users'"
+    else
+      dokku_log_warn "Could not create LDAP group (may already exist)"
+    fi
+  fi
+
+  # Add to links file
+  add_app_link "$SERVICE" "$APP"
+
+  # Restart app
+  if [[ "$NO_RESTART" != "true" ]]; then
+    dokku_log_info2 "Restarting app..."
+    dokku ps:restart "$APP"
+  else
+    dokku_log_verbose "Skipping restart (--no-restart)"
+    dokku_log_info2 "Restart the app to apply changes:"
+    echo "  dokku ps:restart $APP"
+  fi
+
+  dokku_log_info1 "App '$APP' linked to auth service '$SERVICE'"
+}
+
+service-link-cmd "$@"

@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+logs-cmd() {
+  #E display logs from auth service containers
+  #E dokku auth:logs default
+  #E dokku auth:logs default --tail 100
+  #E dokku auth:logs default --lldap --follow
+  #E dokku auth:logs default --authelia
+  #A service, name of the auth service
+  #F -t|--tail <lines>, number of lines to show (default: 50)
+  #F -f|--follow, follow log output
+  #F --lldap, show only LLDAP logs
+  #F --authelia, show only Authelia logs
+  declare desc="display logs from auth service containers"
+
+  local SERVICE=""
+  local TAIL_LINES=50
+  local FOLLOW=false
+  local SHOW_LLDAP=true
+  local SHOW_AUTHELIA=true
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:logs)
+        shift
+        ;;
+      -t | --tail)
+        TAIL_LINES="$2"
+        shift 2
+        ;;
+      -f | --follow)
+        FOLLOW=true
+        shift
+        ;;
+      --lldap)
+        SHOW_LLDAP=true
+        SHOW_AUTHELIA=false
+        shift
+        ;;
+      --authelia)
+        SHOW_LLDAP=false
+        SHOW_AUTHELIA=true
+        shift
+        ;;
+      -h | --help)
+        show_subcommand_help "logs"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        SERVICE="$1"
+        shift
+        ;;
+    esac
+  done
+
+  # Validate required arguments
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  # Verify service exists
+  verify_service_exists "$SERVICE"
+
+  local LLDAP_CONTAINER
+  local AUTHELIA_CONTAINER
+  local DOCKER_ARGS=()
+
+  LLDAP_CONTAINER="$(get_lldap_container "$SERVICE")"
+  AUTHELIA_CONTAINER="$(get_authelia_container "$SERVICE")"
+
+  DOCKER_ARGS+=("--tail" "$TAIL_LINES")
+
+  if [[ "$FOLLOW" == "true" ]]; then
+    DOCKER_ARGS+=("-f")
+  fi
+
+  # Show logs from requested containers
+  if [[ "$SHOW_LLDAP" == "true" ]] && [[ "$SHOW_AUTHELIA" == "true" ]]; then
+    # Show both - interleave with timestamps
+    DOCKER_ARGS+=("--timestamps")
+
+    echo "=== LLDAP Logs ($LLDAP_CONTAINER) ==="
+    if docker ps -a --format '{{.Names}}' | grep -q "^${LLDAP_CONTAINER}$"; then
+      docker logs "${DOCKER_ARGS[@]}" "$LLDAP_CONTAINER" 2>&1 | head -n "$TAIL_LINES" || true
+    else
+      echo "(container not found)"
+    fi
+
+    echo ""
+    echo "=== Authelia Logs ($AUTHELIA_CONTAINER) ==="
+    if docker ps -a --format '{{.Names}}' | grep -q "^${AUTHELIA_CONTAINER}$"; then
+      docker logs "${DOCKER_ARGS[@]}" "$AUTHELIA_CONTAINER" 2>&1 | head -n "$TAIL_LINES" || true
+    else
+      echo "(container not found)"
+    fi
+  elif [[ "$SHOW_LLDAP" == "true" ]]; then
+    if docker ps -a --format '{{.Names}}' | grep -q "^${LLDAP_CONTAINER}$"; then
+      docker logs "${DOCKER_ARGS[@]}" "$LLDAP_CONTAINER" 2>&1
+    else
+      dokku_log_fail "LLDAP container '$LLDAP_CONTAINER' not found"
+    fi
+  elif [[ "$SHOW_AUTHELIA" == "true" ]]; then
+    if docker ps -a --format '{{.Names}}' | grep -q "^${AUTHELIA_CONTAINER}$"; then
+      docker logs "${DOCKER_ARGS[@]}" "$AUTHELIA_CONTAINER" 2>&1
+    else
+      dokku_log_fail "Authelia container '$AUTHELIA_CONTAINER' not found"
+    fi
+  fi
+}
+
+logs-cmd "$@"
