@@ -190,6 +190,60 @@ get_service_network() {
   echo "auth-${SERVICE}"
 }
 
+# Get Authelia domain for service
+get_authelia_domain() {
+  local SERVICE="$1"
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+
+  if [[ -f "$SERVICE_ROOT/AUTHELIA_DOMAIN" ]]; then
+    cat "$SERVICE_ROOT/AUTHELIA_DOMAIN"
+  else
+    echo "auth.example.com"
+  fi
+}
+
+# Get LLDAP domain for service
+get_lldap_domain() {
+  local SERVICE="$1"
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+
+  if [[ -f "$SERVICE_ROOT/LLDAP_DOMAIN" ]]; then
+    cat "$SERVICE_ROOT/LLDAP_DOMAIN"
+  else
+    echo "ldap.example.com"
+  fi
+}
+
+# Get LDAP base DN for service
+get_ldap_base_dn() {
+  local SERVICE="$1"
+  local SERVICE_ROOT
+  SERVICE_ROOT="$(get_service_root "$SERVICE")"
+
+  if [[ -f "$SERVICE_ROOT/LDAP_BASE_DN" ]]; then
+    cat "$SERVICE_ROOT/LDAP_BASE_DN"
+  else
+    echo "dc=example,dc=com"
+  fi
+}
+
+# List available integration presets
+list_integration_presets() {
+  local PRESET_DIR="$PLUGIN_BASE_PATH/integrations"
+  if [[ -d "$PRESET_DIR" ]]; then
+    for preset in "$PRESET_DIR"/*.sh; do
+      [[ -f "$preset" ]] || continue
+      local name
+      name="$(basename "$preset" .sh)"
+      # shellcheck source=/dev/null
+      source "$preset"
+      printf "  %-15s %s\n" "$name" "${PRESET_DESCRIPTION:-}"
+    done
+  fi
+}
+
 # Wait for container to be healthy
 wait_for_container() {
   local CONTAINER="$1"

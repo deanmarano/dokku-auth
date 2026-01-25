@@ -10,14 +10,16 @@ source "$PLUGIN_BASE_PATH/functions"
 oidc-add-cmd() {
   #E add an OIDC client to an auth service
   #E dokku auth:oidc:add default myapp --redirect-uri https://myapp.example.com/callback
-  #E dokku auth:oidc:add production gitlab --redirect-uri https://gitlab.example.com/users/auth/openid_connect/callback --secret mysecret
+  #E dokku auth:oidc:add default immich --preset immich --domain photos.example.com
   #A service, name of the auth service
   #A client_id, unique identifier for the OIDC client
-  #F -r|--redirect-uri <uri>, redirect URI (required)
+  #F -r|--redirect-uri <uri>, redirect URI (required unless using --preset with --domain)
   #F -s|--secret <secret>, client secret (auto-generated if not provided)
   #F --public, create a public client (no secret required)
   #F --pkce, require PKCE for this client
   #F --scopes <scopes>, allowed scopes (default: openid profile email groups)
+  #F --preset <name>, use preset config (nextcloud, gitea, immich, etc.)
+  #F --domain <domain>, app domain for preset redirect URI generation
   declare desc="add an OIDC client to an auth service"
 
   local SERVICE=""
@@ -27,6 +29,8 @@ oidc-add-cmd() {
   local IS_PUBLIC=false
   local REQUIRE_PKCE=false
   local SCOPES="openid profile email groups"
+  local PRESET=""
+  local APP_DOMAIN=""
 
   # Parse arguments
   local POSITIONAL=()
@@ -53,6 +57,14 @@ oidc-add-cmd() {
         ;;
       --scopes)
         SCOPES="$2"
+        shift 2
+        ;;
+      --preset)
+        PRESET="$2"
+        shift 2
+        ;;
+      --domain)
+        APP_DOMAIN="$2"
         shift 2
         ;;
       -h | --help)
@@ -82,8 +94,38 @@ oidc-add-cmd() {
     dokku_log_fail "Client ID is required"
   fi
 
+  # Load preset if specified
+  if [[ -n "$PRESET" ]]; then
+    local PRESET_FILE="$PLUGIN_BASE_PATH/integrations/${PRESET}.sh"
+    if [[ ! -f "$PRESET_FILE" ]]; then
+      local AVAILABLE_PRESETS
+      AVAILABLE_PRESETS="$(find "$PLUGIN_BASE_PATH/integrations/" -name "*.sh" -exec basename {} .sh \; 2>/dev/null | tr '\n' ' ')"
+      dokku_log_fail "Unknown preset: $PRESET (available: $AVAILABLE_PRESETS)"
+    fi
+
+    # shellcheck source=/dev/null
+    source "$PRESET_FILE"
+
+    # Check if preset supports OIDC
+    if [[ "${PRESET_OIDC_SUPPORTED:-true}" == "false" ]]; then
+      dokku_log_fail "Preset '$PRESET' does not support OIDC. Use 'dokku auth:integrate:$PRESET' for LDAP setup."
+    fi
+
+    # Apply preset defaults (can be overridden by explicit flags)
+    [[ -z "$REDIRECT_URI" ]] && [[ -n "$APP_DOMAIN" ]] && REDIRECT_URI="$(preset_redirect_uri "$APP_DOMAIN")"
+    [[ "$SCOPES" == "openid profile email groups" ]] && [[ -n "$PRESET_SCOPES" ]] && SCOPES="$PRESET_SCOPES"
+    [[ "$REQUIRE_PKCE" == "false" ]] && [[ "${PRESET_REQUIRE_PKCE:-false}" == "true" ]] && REQUIRE_PKCE=true
+    [[ "$IS_PUBLIC" == "false" ]] && [[ "${PRESET_PUBLIC:-false}" == "true" ]] && IS_PUBLIC=true
+
+    dokku_log_info2 "Using preset: $PRESET_NAME - $PRESET_DESCRIPTION"
+  fi
+
   if [[ -z "$REDIRECT_URI" ]]; then
-    dokku_log_fail "Redirect URI is required (use --redirect-uri)"
+    if [[ -n "$PRESET" ]]; then
+      dokku_log_fail "Redirect URI is required. Use --domain <domain> with preset or --redirect-uri <uri>"
+    else
+      dokku_log_fail "Redirect URI is required (use --redirect-uri)"
+    fi
   fi
 
   # Verify service exists
@@ -136,6 +178,13 @@ oidc-add-cmd() {
   echo "  Scopes:        $SCOPES"
   if [[ "$REQUIRE_PKCE" == "true" ]]; then
     echo "  PKCE:          Required"
+  fi
+
+  # Show preset-specific instructions if using a preset
+  if [[ -n "$PRESET" ]] && declare -f preset_instructions >/dev/null 2>&1; then
+    local AUTH_DOMAIN
+    AUTH_DOMAIN="$(get_authelia_domain "$SERVICE")"
+    preset_instructions "$SERVICE" "$CLIENT_ID" "$CLIENT_ID" "$AUTH_DOMAIN"
   fi
 }
 

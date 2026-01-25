@@ -42,6 +42,9 @@ dokku ${PLUGIN_COMMAND_PREFIX} commands:
     ${PLUGIN_COMMAND_PREFIX}:oidc:remove <service> <client>           remove an OIDC client
     ${PLUGIN_COMMAND_PREFIX}:oidc:list <service>                      list OIDC clients
 
+    ${PLUGIN_COMMAND_PREFIX}:integrate <service> <app> --preset <p>   integrate app using preset
+    ${PLUGIN_COMMAND_PREFIX}:integrate --list                         list available presets
+
     ${PLUGIN_COMMAND_PREFIX}:users:list <service>                     list LDAP users
     ${PLUGIN_COMMAND_PREFIX}:users:sync <service>                     sync default group to app groups
     ${PLUGIN_COMMAND_PREFIX}:groups:list <service>                    list LDAP groups

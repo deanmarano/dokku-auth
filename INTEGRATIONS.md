@@ -9,9 +9,9 @@ These apps have native support for both OpenID Connect and LDAP, making them ide
 
 | App | OIDC | LDAP | Proxy Auth | Status |
 |-----|------|------|------------|--------|
-| [Nextcloud](https://nextcloud.com) | ✓ | ✓ | ✓ | Planned |
-| [Gitea](https://gitea.io) | ✓ | ✓ | ✓ | Planned |
-| [Portainer](https://portainer.io) | ✓ | ✓ | - | Planned |
+| [Nextcloud](https://nextcloud.com) | ✓ | ✓ | ✓ | Done |
+| [Gitea](https://gitea.io) | ✓ | ✓ | ✓ | Done |
+| [Portainer](https://portainer.io) | ✓ | ✓ | - | Done |
 | [Proxmox](https://proxmox.com) | ✓ | ✓ | - | Planned |
 | [GitLab](https://gitlab.com) | ✓ | ✓ | - | Planned |
 | [Bookstack](https://www.bookstackapp.com) | ✓ | ✓ | - | Planned |
@@ -22,12 +22,12 @@ These apps support OpenID Connect but not LDAP.
 
 | App | OIDC | LDAP | Proxy Auth | Status |
 |-----|------|------|------------|--------|
-| [Immich](https://immich.app) | ✓ | - | - | Planned |
-| [Grafana](https://grafana.com) | ✓ | ✓ | - | Planned |
-| [Audiobookshelf](https://audiobookshelf.org) | ✓ | - | - | Planned |
+| [Immich](https://immich.app) | ✓ | - | - | Done |
+| [Grafana](https://grafana.com) | ✓ | ✓ | - | Done |
+| [Audiobookshelf](https://audiobookshelf.org) | ✓ | - | - | Done |
 | [Miniflux](https://miniflux.app) | ✓ | - | ✓ | Planned |
 | [Open WebUI](https://openwebui.com) | ✓ | - | - | Planned |
-| [Outline](https://getoutline.com) | ✓ | - | - | Planned |
+| [Outline](https://getoutline.com) | ✓ | - | - | Done |
 | [Matrix Synapse](https://matrix.org) | ✓ | ✓ | - | Planned |
 
 ### Tier 3: LDAP-Only Apps
@@ -35,7 +35,7 @@ These apps support LDAP but not OIDC directly.
 
 | App | OIDC | LDAP | Proxy Auth | Status |
 |-----|------|------|------------|--------|
-| [Jellyfin](https://jellyfin.org) | - | ✓ (plugin) | - | Planned |
+| [Jellyfin](https://jellyfin.org) | - | ✓ (plugin) | - | Done |
 | [Vaultwarden](https://github.com/dani-garcia/vaultwarden) | - | ✓ | - | Planned |
 | [WikiJS](https://js.wiki) | - | ✓ | - | Planned |
 | [Calibre-Web](https://github.com/janeczku/calibre-web) | - | ✓ | ✓ | Planned |
@@ -60,20 +60,33 @@ These apps don't support OIDC or LDAP natively but can be protected via Authelia
 | [Home Assistant](https://home-assistant.io) | - | ✓ | ✓ | Planned |
 | [Apache Guacamole](https://guacamole.apache.org) | ✓ | ✓ | ✓ | Planned |
 
-## Planned Commands
+## Commands
 
-Each integration will add commands like:
+### Using Presets with OIDC
 
 ```bash
-# OIDC client setup
-dokku auth:integrate:nextcloud <service> <app>
-dokku auth:integrate:gitea <service> <app>
-dokku auth:integrate:immich <service> <app>
+# List available presets
+dokku auth:integrate --list
 
-# Or a generic command with presets
-dokku auth:oidc:add <service> <client> --preset nextcloud
-dokku auth:oidc:add <service> <client> --preset gitea
+# Full integration (creates OIDC client + shows app-specific instructions)
+dokku auth:integrate <service> <app> --preset <preset>
+dokku auth:integrate default mycloud --preset nextcloud --set-env
+
+# Or use preset with oidc:add directly
+dokku auth:oidc:add <service> <client> --preset <preset> --domain <app-domain>
+dokku auth:oidc:add default photos --preset immich --domain photos.example.com
 ```
+
+### Available Presets
+
+- `nextcloud` - Nextcloud with user_oidc app
+- `gitea` - Gitea / Forgejo git server
+- `immich` - Immich photo management
+- `jellyfin` - Jellyfin media server (LDAP only)
+- `portainer` - Portainer container management
+- `grafana` - Grafana monitoring dashboard
+- `audiobookshelf` - Audiobookshelf audiobook server
+- `outline` - Outline wiki/knowledge base
 
 ## Integration Details
 

@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# shellcheck source=../config
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/config"
+# shellcheck source=../functions
+source "$PLUGIN_BASE_PATH/functions"
+
+integrate-cmd() {
+  #E integrate an app with auth service using a preset
+  #E dokku auth:integrate default myapp --preset nextcloud
+  #E dokku auth:integrate default photos --preset immich
+  #A service, name of the auth service
+  #A app, name of the Dokku app to integrate
+  #F --preset <name>, integration preset (required)
+  #F --domain <domain>, override app domain (default: from dokku domains)
+  #F --set-env, automatically set environment variables on the app
+  #F --list, list available presets
+  declare desc="integrate an app with auth service using a preset"
+
+  local SERVICE=""
+  local APP=""
+  local PRESET=""
+  local APP_DOMAIN=""
+  local SET_ENV=false
+  local LIST_PRESETS=false
+
+  # Parse arguments
+  local POSITIONAL=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      auth:integrate)
+        shift
+        ;;
+      --preset)
+        PRESET="$2"
+        shift 2
+        ;;
+      --domain)
+        APP_DOMAIN="$2"
+        shift 2
+        ;;
+      --set-env)
+        SET_ENV=true
+        shift
+        ;;
+      --list)
+        LIST_PRESETS=true
+        shift
+        ;;
+      -h | --help)
+        show_subcommand_help "integrate"
+        return 0
+        ;;
+      -*)
+        dokku_log_fail "Unknown option: $1"
+        ;;
+      *)
+        POSITIONAL+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  # Handle --list
+  if [[ "$LIST_PRESETS" == "true" ]]; then
+    dokku_log_info1 "Available integration presets:"
+    list_integration_presets
+    return 0
+  fi
+
+  # Extract positional arguments
+  SERVICE="${POSITIONAL[0]:-}"
+  APP="${POSITIONAL[1]:-}"
+
+  # Validate required arguments
+  if [[ -z "$SERVICE" ]]; then
+    dokku_log_fail "Service name is required"
+  fi
+
+  if [[ -z "$APP" ]]; then
+    dokku_log_fail "App name is required"
+  fi
+
+  if [[ -z "$PRESET" ]]; then
+    dokku_log_fail "Preset is required (use --preset <name> or --list to see available)"
+  fi
+
+  # Verify service and app exist
+  verify_service_exists "$SERVICE"
+  verify_app_exists "$APP"
+
+  # Load preset
+  local PRESET_FILE="$PLUGIN_BASE_PATH/integrations/${PRESET}.sh"
+  if [[ ! -f "$PRESET_FILE" ]]; then
+    dokku_log_fail "Unknown preset: $PRESET"
+  fi
+
+  # shellcheck source=/dev/null
+  source "$PRESET_FILE"
+
+  dokku_log_info1 "Integrating $APP with $SERVICE using preset: $PRESET_NAME"
+
+  # Get app domain if not specified
+  if [[ -z "$APP_DOMAIN" ]]; then
+    APP_DOMAIN="$(get_app_domain "$APP")"
+    if [[ -z "$APP_DOMAIN" ]]; then
+      dokku_log_fail "Could not determine app domain. Use --domain to specify."
+    fi
+  fi
+
+  # Get auth service info
+  local AUTH_DOMAIN
+  local LDAP_HOST
+  local LDAP_PORT
+  local BASE_DN
+  AUTH_DOMAIN="$(get_authelia_domain "$SERVICE")"
+  LDAP_HOST="$(get_lldap_container "$SERVICE")"
+  LDAP_PORT="${LLDAP_LDAP_PORT:-3890}"
+  BASE_DN="$(get_ldap_base_dn "$SERVICE")"
+
+  # Check if preset supports OIDC
+  if [[ "${PRESET_OIDC_SUPPORTED:-true}" == "true" ]] && [[ -n "${PRESET_SCOPES:-}" ]]; then
+    dokku_log_info2 "Setting up OIDC client..."
+
+    # Generate redirect URI
+    local REDIRECT_URI
+    REDIRECT_URI="$(preset_redirect_uri "$APP_DOMAIN")"
+
+    # Check if client already exists
+    local SERVICE_ROOT
+    SERVICE_ROOT="$(get_service_root "$SERVICE")"
+    if [[ -d "$SERVICE_ROOT/oidc-clients/$APP" ]]; then
+      dokku_log_warn "OIDC client '$APP' already exists, skipping creation"
+    else
+      # Create OIDC client
+      local OIDC_ARGS=("auth:oidc:add" "$SERVICE" "$APP" "--redirect-uri" "$REDIRECT_URI")
+
+      if [[ -n "${PRESET_SCOPES:-}" ]]; then
+        OIDC_ARGS+=("--scopes" "$PRESET_SCOPES")
+      fi
+
+      if [[ "${PRESET_REQUIRE_PKCE:-false}" == "true" ]]; then
+        OIDC_ARGS+=("--pkce")
+      fi
+
+      if [[ "${PRESET_PUBLIC:-false}" == "true" ]]; then
+        OIDC_ARGS+=("--public")
+      fi
+
+      # Run oidc-add
+      "$PLUGIN_BASE_PATH/subcommands/oidc-add" "${OIDC_ARGS[@]}"
+    fi
+
+    # Get the client secret
+    local CLIENT_SECRET=""
+    if [[ -f "$SERVICE_ROOT/oidc-clients/$APP/SECRET" ]]; then
+      CLIENT_SECRET="$(cat "$SERVICE_ROOT/oidc-clients/$APP/SECRET")"
+    fi
+
+    # Set environment variables if requested
+    if [[ "$SET_ENV" == "true" ]] && declare -f preset_env_vars >/dev/null 2>&1; then
+      local ENV_VARS
+      ENV_VARS="$(preset_env_vars "$SERVICE" "$APP" "$APP" "$CLIENT_SECRET" "$AUTH_DOMAIN")"
+
+      if [[ -n "$ENV_VARS" ]]; then
+        dokku_log_info2 "Setting environment variables on $APP..."
+        while IFS= read -r line; do
+          [[ -z "$line" ]] && continue
+          local key="${line%%=*}"
+          local value="${line#*=}"
+          dokku config:set --no-restart "$APP" "$key=$value"
+        done <<<"$ENV_VARS"
+        dokku_log_info2 "Environment variables set. Restart app to apply."
+      fi
+    fi
+  fi
+
+  # Show instructions
+  echo ""
+  dokku_log_info1 "Integration complete!"
+
+  if declare -f preset_instructions >/dev/null 2>&1; then
+    preset_instructions "$SERVICE" "$APP" "$APP" "$AUTH_DOMAIN"
+  fi
+
+  # Show LDAP instructions if supported
+  if [[ "${PRESET_LDAP_SUPPORTED:-false}" == "true" ]] && declare -f preset_ldap_config >/dev/null 2>&1; then
+    local BIND_DN="uid=admin,ou=people,$BASE_DN"
+    preset_ldap_config "$SERVICE" "$LDAP_HOST" "$LDAP_PORT" "$BASE_DN" "$BIND_DN"
+  fi
+}
+
+integrate-cmd "$@"

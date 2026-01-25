@@ -14,6 +14,7 @@ lint: ## Run shellcheck on all scripts
 	@# SC2001: See if you can use ${variable//search/replace} (sed is clearer for line prefixing)
 	@shellcheck -x -e SC1091 -e SC2034 -e SC2001 commands config functions help-functions log-functions install
 	@shellcheck -x -e SC1091 -e SC2034 -e SC2001 subcommands/*
+	@shellcheck -x -e SC1091 -e SC2034 -e SC2001 integrations/*.sh 2>/dev/null || true
 	@shellcheck -x -e SC1091 -e SC2034 -e SC2001 providers/*/provider.sh providers/*/config.sh 2>/dev/null || true
 	@echo "Shellcheck passed!"
 
