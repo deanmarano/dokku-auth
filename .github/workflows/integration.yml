@@ -37,13 +37,37 @@ jobs:
       - name: Install Plugin
         run: |
           sudo dokku plugin:install file://${{ github.workspace }} auth
-          
+
           # Verify plugin installed
           dokku plugin:list | grep auth
 
-      - name: Run Integration Tests
+      - name: Verify Docker is Running
         run: |
-          sudo bats tests/integration/*.bats
+          docker version
+          docker ps
+
+      - name: Create Test Service for BATS
+        id: create-service
+        run: |
+          # Try to create a service - capture output for debugging
+          echo "Creating test service..."
+          if sudo dokku auth:create ci-test-service --gateway-domain auth.ci-test.example.com 2>&1; then
+            echo "Service created successfully"
+            echo "service_created=true" >> $GITHUB_OUTPUT
+          else
+            echo "Service creation failed (this may be expected if Docker images can't be pulled)"
+            echo "service_created=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Show what we have
+          dokku auth:list || true
+        continue-on-error: true
+
+      - name: Run Integration Tests
+        env:
+          CI_TEST_SERVICE: ci-test-service
+        run: |
+          sudo -E bats tests/integration/*.bats
 
       - name: Test Plugin Commands
         run: |

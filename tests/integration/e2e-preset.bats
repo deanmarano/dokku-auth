@@ -13,14 +13,24 @@
 load "${BATS_TEST_DIRNAME}/../test_helper/bats-support/load"
 load "${BATS_TEST_DIRNAME}/../test_helper/bats-assert/load"
 
-# Test service name (unique per run to avoid conflicts)
-TEST_SERVICE="e2e-test-$$"
+# Test service name - use CI-provided service if available, otherwise create one
+# In CI: CI_TEST_SERVICE is set by the workflow after creating the service
+# Locally: creates a unique service per test run
+TEST_SERVICE="${CI_TEST_SERVICE:-e2e-test-$$}"
 SERVICE_CREATED=false
 
 setup_file() {
   # Skip if dokku is not installed
   if ! command -v dokku &>/dev/null; then
     return 0
+  fi
+
+  # If CI provided a service, check if it exists
+  if [[ -n "${CI_TEST_SERVICE:-}" ]]; then
+    if dokku auth:info "$CI_TEST_SERVICE" &>/dev/null; then
+      export SERVICE_CREATED=true
+      return 0
+    fi
   fi
 
   # Try to create test service - this may fail in CI without Docker
