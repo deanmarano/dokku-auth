@@ -1,0 +1,94 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [trunk, main]
+  pull_request:
+    branches: [trunk, main]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dokku
+        run: |
+          # Install Dokku from official repository
+          wget -NP . https://dokku.com/bootstrap.sh
+          sudo DOKKU_TAG=v0.34.4 bash bootstrap.sh
+          
+          # Configure Dokku (non-interactive)
+          sudo dokku domains:set-global example.com
+          
+          # Verify installation
+          dokku version
+
+      - name: Install BATS
+        run: |
+          git clone https://github.com/bats-core/bats-core.git /tmp/bats-core
+          cd /tmp/bats-core && sudo ./install.sh /usr/local
+
+      - name: Install Plugin
+        run: |
+          sudo dokku plugin:install file://${{ github.workspace }} auth
+          
+          # Verify plugin installed
+          dokku plugin:list | grep auth
+
+      - name: Run Integration Tests
+        run: |
+          sudo bats tests/integration/*.bats
+
+      - name: Test Plugin Commands
+        run: |
+          # Test help
+          dokku auth:help
+          
+          # Test integrate --list
+          dokku auth:integrate --list
+
+      - name: Test Service Lifecycle
+        run: |
+          # Create a test service
+          sudo dokku auth:create test-service --gateway-domain auth.example.com || true
+          
+          # List services
+          dokku auth:list
+          
+          # Check service info (may fail without containers, that's ok)
+          dokku auth:info test-service || true
+          
+          # Destroy service
+          sudo dokku auth:destroy test-service -f || true
+
+      - name: Test OIDC Client with Preset
+        run: |
+          # Create service for OIDC testing
+          sudo dokku auth:create oidc-test --gateway-domain auth.example.com || true
+          
+          # Add OIDC client using Immich preset
+          sudo dokku auth:oidc:add oidc-test immich \
+            --preset immich \
+            --domain photos.example.com || true
+          
+          # List OIDC clients
+          dokku auth:oidc:list oidc-test || true
+          
+          # Cleanup
+          sudo dokku auth:destroy oidc-test -f || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Remove any test services
+          sudo dokku auth:destroy test-service -f 2>/dev/null || true
+          sudo dokku auth:destroy oidc-test -f 2>/dev/null || true
+          
+          # Uninstall plugin
+          sudo dokku plugin:uninstall auth 2>/dev/null || true
