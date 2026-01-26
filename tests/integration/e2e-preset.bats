@@ -248,7 +248,8 @@ require_service() {
   sudo dokku auth:oidc:add "$TEST_SERVICE" to-remove \
     --redirect-uri "https://remove.example.com/callback" 2>/dev/null || true
 
-  run sudo dokku auth:oidc:remove "$TEST_SERVICE" to-remove
+  # Use -f to skip confirmation prompt (required in non-interactive CI)
+  run sudo dokku auth:oidc:remove "$TEST_SERVICE" to-remove -f
 
   # Should succeed (client existed) or note not found
   [[ "$status" -eq 0 ]] || [[ "$output" == *"not found"* ]]
