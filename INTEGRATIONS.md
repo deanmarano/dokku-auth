@@ -16,7 +16,7 @@ dokku auth:integrate default mycloud --preset nextcloud --set-env
 dokku auth:oidc:add <service> <client> --preset <preset> --domain <app-domain>
 ```
 
-## Available Presets (23 apps)
+## Available Presets (24 apps)
 
 ### Tier 1: Full OIDC + LDAP Support
 
@@ -58,6 +58,7 @@ dokku auth:oidc:add <service> <client> --preset <preset> --domain <app-domain>
 
 | Preset | App | OIDC | LDAP | Proxy Auth |
 |--------|-----|------|------|------------|
+| `plex` | [Plex](https://plex.tv) | - | - | ✓ (web only) |
 | `arr` | [*arr stack](https://wiki.servarr.com) (Radarr, Sonarr, etc.) | - | - | ✓ |
 | `uptimekuma` | [Uptime Kuma](https://uptime.kuma.pet) | - | - | ✓ |
 | `syncthing` | [Syncthing](https://syncthing.net) | - | - | ✓ |

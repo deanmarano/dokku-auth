@@ -35,7 +35,7 @@ unset_preset_vars() {
 
 @test "integrations: all preset files exist" {
   local presets=(
-    nextcloud gitea immich jellyfin emby portainer grafana audiobookshelf outline
+    nextcloud gitea immich jellyfin emby plex portainer grafana audiobookshelf outline
     proxmox gitlab bookstack hedgedoc miniflux openwebui vaultwarden wikijs
     paperless arr uptimekuma homeassistant syncthing guacamole navidrome
     calibreweb matrix linkding
@@ -251,6 +251,14 @@ unset_preset_vars() {
   [[ -z "$uri" ]]
 }
 
+@test "integrations: plex returns empty redirect URI (proxy auth)" {
+  unset_preset_vars
+  load_preset "plex"
+  local uri
+  uri="$(preset_redirect_uri "plex.example.com")"
+  [[ -z "$uri" ]]
+}
+
 # =============================================================================
 # Test OIDC support flags
 # =============================================================================
@@ -281,7 +289,7 @@ unset_preset_vars() {
 }
 
 @test "integrations: proxy auth presets have OIDC support disabled" {
-  local proxy_presets=(arr uptimekuma syncthing homeassistant navidrome linkding)
+  local proxy_presets=(arr uptimekuma syncthing homeassistant navidrome linkding plex)
 
   for preset in "${proxy_presets[@]}"; do
     unset_preset_vars
@@ -487,7 +495,7 @@ unset_preset_vars() {
 }
 
 @test "integrations: proxy auth presets have empty scopes" {
-  local proxy_presets=(arr uptimekuma syncthing homeassistant)
+  local proxy_presets=(arr uptimekuma syncthing homeassistant plex)
 
   for preset in "${proxy_presets[@]}"; do
     unset_preset_vars
