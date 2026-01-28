@@ -16,7 +16,7 @@ dokku auth:integrate default mycloud --preset nextcloud --set-env
 dokku auth:oidc:add <service> <client> --preset <preset> --domain <app-domain>
 ```
 
-## Available Presets (22 apps)
+## Available Presets (23 apps)
 
 ### Tier 1: Full OIDC + LDAP Support
 
@@ -50,6 +50,7 @@ dokku auth:oidc:add <service> <client> --preset <preset> --domain <app-domain>
 | Preset | App | OIDC | LDAP | Proxy Auth |
 |--------|-----|------|------|------------|
 | `jellyfin` | [Jellyfin](https://jellyfin.org) | - | ✓ (plugin) | - |
+| `emby` | [Emby](https://emby.media) | - | ✓ (plugin) | - |
 | `vaultwarden` | [Vaultwarden](https://github.com/dani-garcia/vaultwarden) | - | ✓ | ✓ |
 | `calibreweb` | [Calibre-Web](https://github.com/janeczku/calibre-web) | - | ✓ | ✓ |
 

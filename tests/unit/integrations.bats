@@ -35,7 +35,7 @@ unset_preset_vars() {
 
 @test "integrations: all preset files exist" {
   local presets=(
-    nextcloud gitea immich jellyfin portainer grafana audiobookshelf outline
+    nextcloud gitea immich jellyfin emby portainer grafana audiobookshelf outline
     proxmox gitlab bookstack hedgedoc miniflux openwebui vaultwarden wikijs
     paperless arr uptimekuma homeassistant syncthing guacamole navidrome
     calibreweb matrix linkding
@@ -215,6 +215,14 @@ unset_preset_vars() {
   [[ -z "$uri" ]]
 }
 
+@test "integrations: emby returns empty redirect URI (LDAP only)" {
+  unset_preset_vars
+  load_preset "emby"
+  local uri
+  uri="$(preset_redirect_uri "emby.example.com")"
+  [[ -z "$uri" ]]
+}
+
 # =============================================================================
 # Test proxy auth presets return empty redirect URI
 # =============================================================================
@@ -263,7 +271,7 @@ unset_preset_vars() {
 }
 
 @test "integrations: LDAP-only presets have OIDC support disabled" {
-  local ldap_only_presets=(jellyfin vaultwarden)
+  local ldap_only_presets=(jellyfin emby vaultwarden)
 
   for preset in "${ldap_only_presets[@]}"; do
     unset_preset_vars
@@ -421,7 +429,7 @@ unset_preset_vars() {
 @test "integrations: LDAP-capable presets have preset_ldap_config" {
   local ldap_presets=(
     nextcloud gitea portainer proxmox gitlab bookstack hedgedoc
-    jellyfin vaultwarden calibreweb wikijs grafana guacamole matrix
+    jellyfin emby vaultwarden calibreweb wikijs grafana guacamole matrix
   )
 
   for preset in "${ldap_presets[@]}"; do
