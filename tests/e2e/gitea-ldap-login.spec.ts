@@ -201,23 +201,29 @@ test.describe('Gitea LDAP Login', () => {
       sh(`docker rm -f ${GITEA_CONTAINER}`);
     } catch {}
 
-    // Run Gitea container on the bridge network (can access other containers by IP)
+    // Run Gitea container with port exposed to host for browser access
+    // Also connect to dokku's bridge network so it can reach LLDAP
     sh(`docker run -d --name ${GITEA_CONTAINER} \
+      -p 3333:3000 \
       -e GITEA__database__DB_TYPE=sqlite3 \
       -e GITEA__security__INSTALL_LOCK=true \
       -e GITEA__security__SECRET_KEY=supersecretkey123456789012345678 \
       -e GITEA__server__DOMAIN=localhost \
-      -e GITEA__server__ROOT_URL=http://localhost:3000/ \
+      -e GITEA__server__ROOT_URL=http://localhost:3333/ \
       -e GITEA__service__DISABLE_REGISTRATION=true \
       gitea/gitea:latest`);
+
+    // Connect Gitea to dokku's bridge network so it can reach LLDAP
+    try {
+      sh(`docker network connect bridge ${GITEA_CONTAINER}`);
+    } catch {}
 
     // Wait for Gitea to start
     console.log('Waiting for Gitea to start...');
     await new Promise((r) => setTimeout(r, 15000));
 
-    // Get Gitea container IP
-    const giteaIp = getContainerIp(GITEA_CONTAINER);
-    GITEA_URL = `http://${giteaIp}:3000`;
+    // Use localhost URL since port is exposed
+    GITEA_URL = `http://localhost:3333`;
     console.log(`Gitea URL: ${GITEA_URL}`);
 
     // 3. Create test user in LLDAP
@@ -258,11 +264,12 @@ test.describe('Gitea LDAP Login', () => {
   test('should configure LDAP authentication source', async ({ page }) => {
     const creds = getLdapCredentials();
 
-    // Get LLDAP container IP on the shared network
-    const ldapIpOnNetwork = execSync(
-      `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' dokku.auth.directory.${SERVICE_NAME}`,
+    // Get LLDAP container IP - use the first IP from any network
+    const ldapIpRaw = execSync(
+      `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' dokku.auth.directory.${SERVICE_NAME}`,
       { encoding: 'utf-8' }
     ).trim();
+    const ldapIpOnNetwork = ldapIpRaw.split(' ')[0]; // Get first IP
     console.log(`LLDAP IP for Gitea: ${ldapIpOnNetwork}`);
 
     // This test configures LDAP via Gitea's admin UI
