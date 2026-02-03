@@ -73,6 +73,9 @@ jobs:
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
           sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
           sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
+          # Create plugin data directory
+          sudo mkdir -p /var/lib/dokku/services/auth
+          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
           sudo dokku auth:help
 
@@ -122,6 +125,9 @@ jobs:
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
           sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
           sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
+          # Create plugin data directory
+          sudo mkdir -p /var/lib/dokku/services/auth
+          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
 
       - name: Run E2E tests
