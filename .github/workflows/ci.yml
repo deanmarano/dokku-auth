@@ -91,6 +91,15 @@ jobs:
         run: |
           docker compose -f docker-compose.test.yml exec -T dokku dokku auth:help
 
+      - name: Debug Docker access
+        run: |
+          echo "=== Checking containers from host ==="
+          docker ps
+          echo "=== Checking Docker access from test-runner ==="
+          docker compose -f docker-compose.test.yml exec -T test-runner docker ps || echo "Docker access failed"
+          echo "=== Testing dokku wrapper ==="
+          docker compose -f docker-compose.test.yml exec -T test-runner dokku version || echo "dokku wrapper failed"
+
       - name: Run integration tests
         run: |
           docker compose -f docker-compose.test.yml exec -T test-runner npm run test:integration
