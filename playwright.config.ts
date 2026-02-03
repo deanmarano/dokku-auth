@@ -64,12 +64,12 @@ export default defineConfig({
       timeout: 600000, // 10 minutes for full OIDC setup
     },
 
-    // Gitea LDAP login test - full end-to-end
+    // LDAP authentication tests - user creation and authentication
     {
       name: 'gitea-ldap',
       testMatch: ['gitea-ldap-login.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
-      timeout: 900000, // 15 minutes - includes Gitea deployment
+      timeout: 300000, // 5 minutes
     },
   ],
 

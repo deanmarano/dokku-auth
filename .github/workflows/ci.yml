@@ -154,8 +154,8 @@ jobs:
           sudo dokku auth:list 2>/dev/null || true
           sudo dokku auth:frontend:list 2>/dev/null || true
 
-  gitea-ldap-test:
-    name: Gitea LDAP Login Test
+  ldap-auth-test:
+    name: LDAP Authentication Test
     runs-on: ubuntu-24.04
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
@@ -187,10 +187,7 @@ jobs:
           sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
 
-      - name: Pull Gitea image
-        run: docker pull gitea/gitea:latest
-
-      - name: Run Gitea LDAP login test
+      - name: Run LDAP authentication tests
         run: npx playwright test --project=gitea-ldap
         env:
           CI: true
@@ -202,7 +199,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gitea-ldap-playwright-report
+          name: ldap-auth-playwright-report
           path: playwright-report/
 
       - name: Collect logs on failure
@@ -210,7 +207,5 @@ jobs:
         run: |
           echo "=== Docker containers ==="
           docker ps -a
-          echo "=== Gitea logs ==="
-          sudo dokku logs gitea-test 2>/dev/null || true
           echo "=== Auth services ==="
           sudo dokku auth:list 2>/dev/null || true
