@@ -202,7 +202,7 @@ test.describe('Gitea LDAP Login', () => {
     } catch {}
 
     // Run Gitea container with port exposed to host for browser access
-    // Also connect to dokku's bridge network so it can reach LLDAP
+    // Both containers are on Docker's bridge network by default
     sh(`docker run -d --name ${GITEA_CONTAINER} \
       -p 3333:3000 \
       -e GITEA__database__DB_TYPE=sqlite3 \
@@ -213,18 +213,30 @@ test.describe('Gitea LDAP Login', () => {
       -e GITEA__service__DISABLE_REGISTRATION=true \
       gitea/gitea:latest`);
 
-    // Connect Gitea to dokku's bridge network so it can reach LLDAP
-    try {
-      sh(`docker network connect bridge ${GITEA_CONTAINER}`);
-    } catch {}
-
-    // Wait for Gitea to start
-    console.log('Waiting for Gitea to start...');
-    await new Promise((r) => setTimeout(r, 15000));
-
     // Use localhost URL since port is exposed
     GITEA_URL = `http://localhost:3333`;
     console.log(`Gitea URL: ${GITEA_URL}`);
+
+    // Wait for Gitea to be ready (check health endpoint)
+    console.log('Waiting for Gitea to be ready...');
+    let giteaReady = false;
+    for (let i = 0; i < 60; i++) {
+      try {
+        const response = await fetch(`${GITEA_URL}/api/healthz`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(2000)
+        });
+        if (response.ok) {
+          giteaReady = true;
+          console.log('Gitea is ready!');
+          break;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    if (!giteaReady) {
+      console.log('Warning: Gitea health check timed out, continuing anyway...');
+    }
 
     // 3. Create test user in LLDAP
     console.log('Creating test user in LLDAP...');
