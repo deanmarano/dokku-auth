@@ -31,8 +31,7 @@ services:
       context: .
       dockerfile: Dockerfile.test
     depends_on:
-      dokku:
-        condition: service_healthy
+      - dokku
     volumes:
       - .:/app
       - test-results:/app/test-results
