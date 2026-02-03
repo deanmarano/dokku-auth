@@ -6,14 +6,14 @@ import { execSync } from 'child_process';
  *
  * Tests the full flow of:
  * 1. Creating an LLDAP directory service
- * 2. Deploying Gitea as a dokku app
+ * 2. Running Gitea as a Docker container
  * 3. Configuring Gitea to use LDAP authentication
  * 4. Creating a test user in LLDAP
  * 5. Logging into Gitea with LDAP credentials
  */
 
 const SERVICE_NAME = 'gitea-ldap-test';
-const GITEA_APP = 'gitea-test';
+const GITEA_CONTAINER = 'gitea-ldap-test-app';
 const TEST_USER = 'testuser';
 const TEST_PASSWORD = 'TestPass123!';
 const TEST_EMAIL = 'testuser@test.local';
@@ -146,49 +146,6 @@ async function createLdapUser(
     }),
   });
 
-  // Add user to default group so they can access apps
-  const addToGroupQuery = `
-    mutation AddUserToGroup($userId: String!, $groupId: Int!) {
-      addUserToGroup(userId: $userId, groupId: $groupId) {
-        ok
-      }
-    }
-  `;
-
-  // Get the app's user group ID (created by auth:link)
-  const groupsResponse = await fetch(`${lldapUrl}/api/graphql`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      query: '{ groups { id displayName } }',
-    }),
-  });
-
-  const groupsResult = await groupsResponse.json();
-  const appGroup = groupsResult.data?.groups?.find(
-    (g: any) => g.displayName === `${GITEA_APP}_users`
-  );
-
-  if (appGroup) {
-    await fetch(`${lldapUrl}/api/graphql`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        query: addToGroupQuery,
-        variables: {
-          userId: userId,
-          groupId: appGroup.id,
-        },
-      }),
-    });
-  }
-
   console.log(`Created LDAP user: ${userId}`);
 }
 
@@ -233,79 +190,37 @@ test.describe('Gitea LDAP Login', () => {
     LLDAP_URL = `http://${LDAP_CONTAINER_IP}:17170`;
     console.log(`LLDAP URL: ${LLDAP_URL}`);
 
-    // 2. Create Gitea app
-    console.log('Creating Gitea app...');
-    try {
-      dokku(`apps:create ${GITEA_APP}`);
-    } catch (e: any) {
-      if (!e.stderr?.includes('already exists')) {
-        throw e;
-      }
-    }
-
-    // 3. Link Gitea to LLDAP (sets LDAP env vars)
-    console.log('Linking Gitea to LLDAP...');
-    try {
-      dokku(`auth:link ${SERVICE_NAME} ${GITEA_APP}`);
-    } catch (e: any) {
-      if (!e.stderr?.includes('already linked')) {
-        throw e;
-      }
-    }
-
-    // 4. Configure and deploy Gitea
-    console.log('Configuring Gitea...');
+    // Get LLDAP credentials
     const creds = getLdapCredentials();
 
-    // Set Gitea configuration
-    dokku(`config:set --no-restart ${GITEA_APP} ` +
-      `GITEA__database__DB_TYPE=sqlite3 ` +
-      `GITEA__database__PATH=/data/gitea/gitea.db ` +
-      `GITEA__security__INSTALL_LOCK=true ` +
-      `GITEA__security__SECRET_KEY=supersecretkey123456789012345678 ` +
-      `GITEA__server__DOMAIN=${GITEA_APP}.local ` +
-      `GITEA__server__ROOT_URL=http://${GITEA_APP}.local/ ` +
-      `GITEA__service__DISABLE_REGISTRATION=true`
-    );
+    // 2. Run Gitea as a Docker container
+    console.log('Starting Gitea container...');
 
-    // Set storage
-    dokku(`storage:ensure-directory ${GITEA_APP}`);
+    // Clean up any existing container
     try {
-      dokku(`storage:mount ${GITEA_APP} /var/lib/dokku/data/storage/${GITEA_APP}:/data`);
-    } catch (e: any) {
-      if (!e.stderr?.includes('already exists')) {
-        throw e;
-      }
-    }
+      sh(`docker rm -f ${GITEA_CONTAINER}`);
+    } catch {}
 
-    // Deploy Gitea from Docker Hub
-    console.log('Deploying Gitea...');
-    sh(`docker pull gitea/gitea:latest`);
-    dokku(`git:from-image ${GITEA_APP} gitea/gitea:latest`);
+    // Run Gitea container on the bridge network (can access other containers by IP)
+    sh(`docker run -d --name ${GITEA_CONTAINER} \
+      -e GITEA__database__DB_TYPE=sqlite3 \
+      -e GITEA__security__INSTALL_LOCK=true \
+      -e GITEA__security__SECRET_KEY=supersecretkey123456789012345678 \
+      -e GITEA__server__DOMAIN=localhost \
+      -e GITEA__server__ROOT_URL=http://localhost:3000/ \
+      -e GITEA__service__DISABLE_REGISTRATION=true \
+      gitea/gitea:latest`);
 
     // Wait for Gitea to start
     console.log('Waiting for Gitea to start...');
-    await new Promise((r) => setTimeout(r, 10000));
+    await new Promise((r) => setTimeout(r, 15000));
 
-    // Get Gitea URL
-    const giteaContainerName = `${GITEA_APP}.web.1`;
-    let giteaIp: string;
-    try {
-      giteaIp = getContainerIp(giteaContainerName);
-    } catch {
-      // Try alternate container name format
-      giteaIp = getContainerIp(`dokku.${GITEA_APP}.web.1`);
-    }
+    // Get Gitea container IP
+    const giteaIp = getContainerIp(GITEA_CONTAINER);
     GITEA_URL = `http://${giteaIp}:3000`;
     console.log(`Gitea URL: ${GITEA_URL}`);
 
-    // 5. Configure LDAP authentication in Gitea via API
-    console.log('Configuring LDAP authentication in Gitea...');
-
-    // First, create an admin user via environment
-    // Gitea requires initial admin setup, we'll do it via the UI or skip if exists
-
-    // 6. Create test user in LLDAP
+    // 3. Create test user in LLDAP
     console.log('Creating test user in LLDAP...');
     await createLdapUser(
       LLDAP_URL,
@@ -321,9 +236,9 @@ test.describe('Gitea LDAP Login', () => {
   test.afterAll(async () => {
     console.log('=== Cleaning up Gitea LDAP test environment ===');
     try {
-      dokku(`apps:destroy ${GITEA_APP} --force`);
+      sh(`docker rm -f ${GITEA_CONTAINER}`);
     } catch (e) {
-      console.log('Failed to destroy Gitea app:', e);
+      console.log('Failed to remove Gitea container:', e);
     }
     try {
       dokku(`auth:destroy ${SERVICE_NAME} -f`);
@@ -342,6 +257,13 @@ test.describe('Gitea LDAP Login', () => {
 
   test('should configure LDAP authentication source', async ({ page }) => {
     const creds = getLdapCredentials();
+
+    // Get LLDAP container IP on the shared network
+    const ldapIpOnNetwork = execSync(
+      `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' dokku.auth.directory.${SERVICE_NAME}`,
+      { encoding: 'utf-8' }
+    ).trim();
+    console.log(`LLDAP IP for Gitea: ${ldapIpOnNetwork}`);
 
     // This test configures LDAP via Gitea's admin UI
     // First we need to complete initial setup if not done
@@ -376,7 +298,7 @@ test.describe('Gitea LDAP Login', () => {
     await page.waitForTimeout(500);
 
     await page.locator('input[name="name"]').fill('LLDAP');
-    await page.locator('input[name="host"]').fill(LDAP_CONTAINER_IP);
+    await page.locator('input[name="host"]').fill(ldapIpOnNetwork);
     await page.locator('input[name="port"]').fill('3890');
     await page.locator('input[name="bind_dn"]').fill(creds.BIND_DN);
     await page.locator('input[name="bind_password"]').fill(creds.ADMIN_PASSWORD);

@@ -187,6 +187,9 @@ jobs:
           sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
 
+      - name: Pull Gitea image
+        run: docker pull gitea/gitea:latest
+
       - name: Run Gitea LDAP login test
         run: npx playwright test --project=gitea-ldap
         env:
