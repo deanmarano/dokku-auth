@@ -355,7 +355,7 @@ test.describe('Nextcloud LDAP Authentication', () => {
   test('LDAP should be able to find admin user', async () => {
     // Test LDAP connection by searching for users
     const result = execSync(
-      `docker exec -u www-data ${NEXTCLOUD_CONTAINER} php occ ldap:search user admin`,
+      `docker exec -u www-data ${NEXTCLOUD_CONTAINER} php occ ldap:search admin`,
       { encoding: 'utf-8' }
     );
     // Should find the admin user from LLDAP
@@ -365,7 +365,7 @@ test.describe('Nextcloud LDAP Authentication', () => {
   test('LDAP should find test user', async () => {
     // Test that our created test user is discoverable
     const result = execSync(
-      `docker exec -u www-data ${NEXTCLOUD_CONTAINER} php occ ldap:search user ${TEST_USER}`,
+      `docker exec -u www-data ${NEXTCLOUD_CONTAINER} php occ ldap:search ${TEST_USER}`,
       { encoding: 'utf-8' }
     );
     expect(result.toLowerCase()).toContain(TEST_USER.toLowerCase());
