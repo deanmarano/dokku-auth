@@ -323,7 +323,89 @@ test.describe('OIDC Application Browser Flow', () => {
     const backendIp = getContainerIp(BACKEND_CONTAINER);
     console.log(`Whoami backend IP: ${backendIp}`);
 
-    // 9. Deploy oauth2-proxy
+    // 9. Deploy nginx FIRST as TLS terminating proxy
+    // nginx must be up before oauth2-proxy because oauth2-proxy fetches
+    // OIDC discovery from https://auth.test.local:9443 on startup.
+    // Use Docker DNS resolver so nginx can resolve oauth2-proxy by container name
+    // (it doesn't exist yet, but will be resolved at request time, not startup).
+    console.log('Deploying nginx TLS proxy...');
+    try {
+      execSync(`docker rm -f ${NGINX_CONTAINER}`, { encoding: 'utf-8' });
+    } catch {}
+
+    // Create nginx config using Docker's embedded DNS resolver
+    // The 'set $var' + proxy_pass $var pattern makes nginx resolve at request time
+    const nginxConfig = `
+events { worker_connections 1024; }
+http {
+    resolver 127.0.0.11 valid=10s;
+
+    # Authelia HTTPS
+    server {
+        listen 9443 ssl;
+        server_name ${AUTH_DOMAIN};
+        ssl_certificate /etc/nginx/certs/server.crt;
+        ssl_certificate_key /etc/nginx/certs/server.key;
+        location / {
+            proxy_pass http://${AUTHELIA_INTERNAL_IP}:9091;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+    # oauth2-proxy HTTPS (resolved at request time via Docker DNS)
+    server {
+        listen 4443 ssl;
+        server_name ${APP_DOMAIN};
+        ssl_certificate /etc/nginx/certs/server.crt;
+        ssl_certificate_key /etc/nginx/certs/server.key;
+        location / {
+            set $oauth2_backend "http://${OAUTH2_PROXY_CONTAINER}:4180";
+            proxy_pass $oauth2_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}`;
+
+    fs.writeFileSync('/tmp/nginx.conf', nginxConfig);
+
+    execSync(
+      `docker run -d --name ${NGINX_CONTAINER} ` +
+        `--network ${AUTH_NETWORK} ` +
+        `-p ${AUTHELIA_HTTPS_PORT}:9443 ` +
+        `-p ${OAUTH2_PROXY_HTTPS_PORT}:4443 ` +
+        `-v /tmp/nginx.conf:/etc/nginx/nginx.conf:ro ` +
+        `-v /tmp/certs:/etc/nginx/certs:ro ` +
+        `nginx:alpine`,
+      { encoding: 'utf-8' }
+    );
+
+    // Wait for nginx to be ready
+    console.log('Waiting for nginx TLS proxy to be ready...');
+    await new Promise((r) => setTimeout(r, 3000));
+
+    // Wait for Authelia HTTPS to be accessible via nginx
+    console.log('Waiting for Authelia HTTPS to be ready...');
+    const autheliaHttpsReady = await waitForHttps(
+      `https://${AUTH_DOMAIN}:${AUTHELIA_HTTPS_PORT}/api/health`,
+      60000
+    );
+    if (!autheliaHttpsReady) {
+      const logs = execSync(`docker logs ${NGINX_CONTAINER} 2>&1`, { encoding: 'utf-8' });
+      console.log('nginx logs:', logs);
+      throw new Error('Authelia HTTPS not ready');
+    }
+    console.log('Authelia HTTPS is ready');
+
+    // Get nginx container IP so oauth2-proxy can reach auth.test.local via nginx
+    const nginxIp = getContainerIp(NGINX_CONTAINER);
+    console.log(`nginx container IP: ${nginxIp}`);
+
+    // 10. Deploy oauth2-proxy (AFTER nginx so OIDC discovery works)
     console.log('Deploying oauth2-proxy...');
     try {
       execSync(`docker rm -f ${OAUTH2_PROXY_CONTAINER}`, { encoding: 'utf-8' });
@@ -332,8 +414,8 @@ test.describe('OIDC Application Browser Flow', () => {
     // Cookie secret must be exactly 16, 24, or 32 bytes for AES cipher
     const cookieSecret = '01234567890123456789012345678901'; // exactly 32 bytes
 
-    // oauth2-proxy configuration for Authelia OIDC
-    // Use internal IP for backend communication, domain for browser redirects
+    // oauth2-proxy reaches OIDC discovery via nginx (using --add-host to route
+    // auth.test.local to nginx's container IP on port 9443)
     execSync(
       `docker run -d --name ${OAUTH2_PROXY_CONTAINER} ` +
         `--network ${AUTH_NETWORK} ` +
@@ -353,87 +435,35 @@ test.describe('OIDC Application Browser Flow', () => {
         `-e OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY=true ` +
         `-e OAUTH2_PROXY_SCOPE="openid profile email" ` +
         `-e OAUTH2_PROXY_CODE_CHALLENGE_METHOD=S256 ` +
-        `--add-host=${AUTH_DOMAIN}:host-gateway ` +
+        `--add-host=${AUTH_DOMAIN}:${nginxIp} ` +
         `quay.io/oauth2-proxy/oauth2-proxy:latest`,
       { encoding: 'utf-8' }
     );
 
-    const oauth2ProxyIp = getContainerIp(OAUTH2_PROXY_CONTAINER);
-    console.log(`oauth2-proxy IP: ${oauth2ProxyIp}`);
+    // Wait for oauth2-proxy to start and be accessible via nginx
+    console.log('Waiting for oauth2-proxy to be ready...');
+    await new Promise((r) => setTimeout(r, 5000));
 
-    // 10. Deploy nginx as TLS terminating proxy for both services
-    console.log('Deploying nginx TLS proxy...');
+    // Check if oauth2-proxy is running
     try {
-      execSync(`docker rm -f ${NGINX_CONTAINER}`, { encoding: 'utf-8' });
-    } catch {}
-
-    // Create nginx config
-    const nginxConfig = `
-events { worker_connections 1024; }
-http {
-    # Authelia HTTPS
-    server {
-        listen 9443 ssl;
-        server_name ${AUTH_DOMAIN};
-        ssl_certificate /etc/nginx/certs/server.crt;
-        ssl_certificate_key /etc/nginx/certs/server.key;
-        location / {
-            proxy_pass http://${AUTHELIA_INTERNAL_IP}:9091;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
+      const proxyStatus = execSync(
+        `docker inspect -f '{{.State.Status}}' ${OAUTH2_PROXY_CONTAINER}`,
+        { encoding: 'utf-8' }
+      ).trim();
+      console.log(`oauth2-proxy status: ${proxyStatus}`);
+      if (proxyStatus !== 'running') {
+        const logs = execSync(`docker logs ${OAUTH2_PROXY_CONTAINER} 2>&1`, {
+          encoding: 'utf-8',
+        });
+        console.log('oauth2-proxy logs:', logs);
+        throw new Error(`oauth2-proxy not running: ${proxyStatus}`);
+      }
+    } catch (e: any) {
+      if (e.message?.includes('oauth2-proxy not running')) throw e;
+      console.log('Could not check oauth2-proxy status:', e.message);
     }
-    # oauth2-proxy HTTPS
-    server {
-        listen 4443 ssl;
-        server_name ${APP_DOMAIN};
-        ssl_certificate /etc/nginx/certs/server.crt;
-        ssl_certificate_key /etc/nginx/certs/server.key;
-        location / {
-            proxy_pass http://${oauth2ProxyIp}:4180;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-    }
-}`;
 
-    fs.writeFileSync('/tmp/nginx.conf', nginxConfig);
-
-    execSync(
-      `docker run -d --name ${NGINX_CONTAINER} ` +
-        `--network ${AUTH_NETWORK} ` +
-        `-p ${AUTHELIA_HTTPS_PORT}:9443 ` +
-        `-p ${OAUTH2_PROXY_HTTPS_PORT}:4443 ` +
-        `-v /tmp/nginx.conf:/etc/nginx/nginx.conf:ro ` +
-        `-v /tmp/certs:/etc/nginx/certs:ro ` +
-        `--add-host=${AUTH_DOMAIN}:127.0.0.1 ` +
-        `--add-host=${APP_DOMAIN}:127.0.0.1 ` +
-        `nginx:alpine`,
-      { encoding: 'utf-8' }
-    );
-
-    // Wait for nginx to be ready
-    console.log('Waiting for nginx TLS proxy to be ready...');
-    await new Promise((r) => setTimeout(r, 3000));
-
-    // Wait for Authelia HTTPS to be accessible
-    console.log('Waiting for Authelia HTTPS to be ready...');
-    const autheliaHttpsReady = await waitForHttps(
-      `https://${AUTH_DOMAIN}:${AUTHELIA_HTTPS_PORT}/api/health`,
-      60000
-    );
-    if (!autheliaHttpsReady) {
-      const logs = execSync(`docker logs ${NGINX_CONTAINER} 2>&1`, { encoding: 'utf-8' });
-      console.log('nginx logs:', logs);
-      throw new Error('Authelia HTTPS not ready');
-    }
-    console.log('Authelia HTTPS is ready');
-
-    // Wait for oauth2-proxy HTTPS to be accessible
+    // Wait for oauth2-proxy HTTPS to be accessible via nginx
     console.log('Waiting for oauth2-proxy HTTPS to be ready...');
     const proxyHttpsReady = await waitForHttps(
       `https://${APP_DOMAIN}:${OAUTH2_PROXY_HTTPS_PORT}/ping`,
