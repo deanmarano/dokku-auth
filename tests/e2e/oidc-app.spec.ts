@@ -6,12 +6,14 @@ import { execSync } from 'child_process';
  *
  * Tests a complete OIDC-protected application with browser-based login:
  * 1. Create LLDAP directory service
- * 2. Create Authelia frontend with OIDC enabled (exposed on host port)
- * 3. Deploy oauth2-proxy as an OIDC client (exposed on host port)
+ * 2. Create Authelia frontend with OIDC enabled
+ * 3. Deploy oauth2-proxy as an OIDC client
  * 4. Create a test user in LLDAP
  * 5. Use Playwright to test the full browser login flow
  *
- * This test exposes services on host ports so Playwright can access them.
+ * Requires /etc/hosts entries:
+ *   127.0.0.1 auth.test.local
+ *   127.0.0.1 app.test.local
  */
 
 const DIRECTORY_SERVICE = 'oidc-app-dir-test';
@@ -23,11 +25,16 @@ const TEST_PASSWORD = 'OidcPass123!';
 const TEST_EMAIL = 'oidcuser@test.local';
 const OAUTH2_PROXY_CONTAINER = 'oauth2-proxy-test';
 const BACKEND_CONTAINER = 'whoami-test';
+const NGINX_CONTAINER = 'nginx-tls-proxy';
 const USE_SUDO = process.env.DOKKU_USE_SUDO === 'true';
 
-// Host ports for browser access
-const AUTHELIA_HOST_PORT = 9091;
-const OAUTH2_PROXY_HOST_PORT = 4180;
+// Domain names (must be in /etc/hosts pointing to 127.0.0.1)
+const AUTH_DOMAIN = 'auth.test.local';
+const APP_DOMAIN = 'app.test.local';
+
+// HTTPS ports
+const AUTHELIA_HTTPS_PORT = 9443;
+const OAUTH2_PROXY_HTTPS_PORT = 4443;
 
 // Helper to run dokku commands
 function dokku(cmd: string): string {
@@ -151,22 +158,35 @@ async function waitForHealthy(
   return false;
 }
 
-// Wait for HTTP endpoint to be ready
-async function waitForHttp(url: string, maxWait = 60000): Promise<boolean> {
+// Wait for HTTPS endpoint to be ready
+async function waitForHttps(url: string, maxWait = 60000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < maxWait) {
     try {
-      const response = await fetch(url, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000)
+      // Use curl with -k to ignore self-signed cert
+      execSync(`curl -sk -o /dev/null -w "%{http_code}" "${url}"`, {
+        encoding: 'utf-8',
+        timeout: 5000,
       });
-      if (response.ok || response.status === 302 || response.status === 401 || response.status === 403) {
-        return true;
-      }
+      return true;
     } catch {}
     await new Promise((r) => setTimeout(r, 2000));
   }
   return false;
+}
+
+// Generate self-signed certificates
+function generateCerts(): void {
+  console.log('Generating self-signed certificates...');
+  execSync(
+    `mkdir -p /tmp/certs && ` +
+      `openssl req -x509 -nodes -days 1 -newkey rsa:2048 ` +
+      `-keyout /tmp/certs/server.key -out /tmp/certs/server.crt ` +
+      `-subj "/CN=test.local" ` +
+      `-addext "subjectAltName=DNS:auth.test.local,DNS:app.test.local,DNS:*.test.local"`,
+    { encoding: 'utf-8' }
+  );
+  console.log('Certificates generated');
 }
 
 let AUTHELIA_INTERNAL_IP: string;
@@ -176,6 +196,9 @@ let AUTH_NETWORK: string;
 test.describe('OIDC Application Browser Flow', () => {
   test.beforeAll(async () => {
     console.log('=== Setting up OIDC application test environment ===');
+
+    // Generate self-signed certificates
+    generateCerts();
 
     // 1. Create LLDAP directory service
     console.log('Creating LLDAP directory service...');
@@ -216,9 +239,9 @@ test.describe('OIDC Application Browser Flow', () => {
       }
     }
 
-    // 2b. Configure Authelia domain to localhost so OIDC endpoints use localhost URLs
+    // 2b. Configure Authelia domain
     console.log('Configuring Authelia domain...');
-    dokku(`auth:frontend:config ${FRONTEND_SERVICE} DOMAIN=localhost:${AUTHELIA_HOST_PORT}`);
+    dokku(`auth:frontend:config ${FRONTEND_SERVICE} DOMAIN=${AUTH_DOMAIN}`);
 
     // 3. Link frontend to directory
     console.log('Linking frontend to directory...');
@@ -234,8 +257,8 @@ test.describe('OIDC Application Browser Flow', () => {
     console.log('Enabling OIDC...');
     dokku(`auth:oidc:enable ${FRONTEND_SERVICE}`);
 
-    // 5. Add OIDC client for oauth2-proxy with localhost redirect URI
-    const REDIRECT_URI = `http://localhost:${OAUTH2_PROXY_HOST_PORT}/oauth2/callback`;
+    // 5. Add OIDC client for oauth2-proxy
+    const REDIRECT_URI = `https://${APP_DOMAIN}:${OAUTH2_PROXY_HTTPS_PORT}/oauth2/callback`;
     console.log('Adding OIDC client...');
     try {
       dokku(
@@ -273,22 +296,7 @@ test.describe('OIDC Application Browser Flow', () => {
     AUTHELIA_INTERNAL_IP = getContainerIp(autheliaContainerName);
     console.log(`Authelia internal IP: ${AUTHELIA_INTERNAL_IP}`);
 
-    // 7. Expose Authelia on host port using socat (since we can't easily restart with -p)
-    console.log('Exposing Authelia on host port...');
-    try {
-      execSync(`docker rm -f authelia-port-forward`, { encoding: 'utf-8' });
-    } catch {}
-
-    execSync(
-      `docker run -d --name authelia-port-forward ` +
-        `--network ${AUTH_NETWORK} ` +
-        `-p ${AUTHELIA_HOST_PORT}:${AUTHELIA_HOST_PORT} ` +
-        `alpine/socat TCP-LISTEN:${AUTHELIA_HOST_PORT},fork,reuseaddr TCP:${AUTHELIA_INTERNAL_IP}:9091`,
-      { encoding: 'utf-8' }
-    );
-    console.log(`Authelia exposed on http://localhost:${AUTHELIA_HOST_PORT}`);
-
-    // 8. Create test user in LLDAP
+    // 7. Create test user in LLDAP
     const lldapContainer = `dokku.auth.directory.${DIRECTORY_SERVICE}`;
     createLdapUser(
       lldapContainer,
@@ -298,7 +306,7 @@ test.describe('OIDC Application Browser Flow', () => {
       TEST_PASSWORD
     );
 
-    // 9. Deploy a simple whoami backend
+    // 8. Deploy a simple whoami backend
     console.log('Deploying whoami backend...');
     try {
       execSync(`docker rm -f ${BACKEND_CONTAINER}`, { encoding: 'utf-8' });
@@ -314,7 +322,7 @@ test.describe('OIDC Application Browser Flow', () => {
     const backendIp = getContainerIp(BACKEND_CONTAINER);
     console.log(`Whoami backend IP: ${backendIp}`);
 
-    // 10. Deploy oauth2-proxy with host port exposed
+    // 9. Deploy oauth2-proxy
     console.log('Deploying oauth2-proxy...');
     try {
       execSync(`docker rm -f ${OAUTH2_PROXY_CONTAINER}`, { encoding: 'utf-8' });
@@ -324,71 +332,136 @@ test.describe('OIDC Application Browser Flow', () => {
     const cookieSecret = '01234567890123456789012345678901'; // exactly 32 bytes
 
     // oauth2-proxy configuration for Authelia OIDC
-    // Use internal IP for OIDC discovery (container-to-container)
-    // Browser redirects will use the configured login-url which points to localhost
+    // Use internal IP for backend communication, domain for browser redirects
     execSync(
       `docker run -d --name ${OAUTH2_PROXY_CONTAINER} ` +
         `--network ${AUTH_NETWORK} ` +
-        `-p ${OAUTH2_PROXY_HOST_PORT}:4180 ` +
         `-e OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180 ` +
         `-e OAUTH2_PROXY_PROVIDER=oidc ` +
-        `-e OAUTH2_PROXY_OIDC_ISSUER_URL=http://${AUTHELIA_INTERNAL_IP}:9091 ` +
+        `-e OAUTH2_PROXY_OIDC_ISSUER_URL=https://${AUTH_DOMAIN}:${AUTHELIA_HTTPS_PORT} ` +
         `-e OAUTH2_PROXY_CLIENT_ID=${OIDC_CLIENT_ID} ` +
         `-e OAUTH2_PROXY_CLIENT_SECRET=${OIDC_CLIENT_SECRET} ` +
-        `-e OAUTH2_PROXY_REDIRECT_URL=http://localhost:${OAUTH2_PROXY_HOST_PORT}/oauth2/callback ` +
+        `-e OAUTH2_PROXY_REDIRECT_URL=https://${APP_DOMAIN}:${OAUTH2_PROXY_HTTPS_PORT}/oauth2/callback ` +
         `-e OAUTH2_PROXY_UPSTREAMS=http://${backendIp}:80 ` +
         `-e OAUTH2_PROXY_COOKIE_SECRET=${cookieSecret} ` +
-        `-e OAUTH2_PROXY_COOKIE_SECURE=false ` +
-        `-e OAUTH2_PROXY_COOKIE_DOMAINS=localhost ` +
+        `-e OAUTH2_PROXY_COOKIE_SECURE=true ` +
+        `-e OAUTH2_PROXY_COOKIE_DOMAINS=.test.local ` +
         `-e OAUTH2_PROXY_EMAIL_DOMAINS=* ` +
         `-e OAUTH2_PROXY_SKIP_PROVIDER_BUTTON=true ` +
         `-e OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL=true ` +
-        `-e OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION=true ` +
+        `-e OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY=true ` +
         `-e OAUTH2_PROXY_SCOPE="openid profile email" ` +
         `-e OAUTH2_PROXY_CODE_CHALLENGE_METHOD=S256 ` +
-        `-e OAUTH2_PROXY_LOGIN_URL=http://localhost:${AUTHELIA_HOST_PORT}/api/oidc/authorize ` +
-        `-e OAUTH2_PROXY_REDEEM_URL=http://${AUTHELIA_INTERNAL_IP}:9091/api/oidc/token ` +
-        `-e OAUTH2_PROXY_OIDC_JWKS_URL=http://${AUTHELIA_INTERNAL_IP}:9091/jwks.json ` +
-        `-e OAUTH2_PROXY_PROFILE_URL=http://${AUTHELIA_INTERNAL_IP}:9091/api/oidc/userinfo ` +
+        `--add-host=${AUTH_DOMAIN}:host-gateway ` +
         `quay.io/oauth2-proxy/oauth2-proxy:latest`,
       { encoding: 'utf-8' }
     );
 
-    // Wait for oauth2-proxy to be accessible on host
-    console.log('Waiting for oauth2-proxy to be ready on host...');
-    const proxyReady = await waitForHttp(`http://localhost:${OAUTH2_PROXY_HOST_PORT}/ping`, 60000);
-    if (!proxyReady) {
+    const oauth2ProxyIp = getContainerIp(OAUTH2_PROXY_CONTAINER);
+    console.log(`oauth2-proxy IP: ${oauth2ProxyIp}`);
+
+    // 10. Deploy nginx as TLS terminating proxy for both services
+    console.log('Deploying nginx TLS proxy...');
+    try {
+      execSync(`docker rm -f ${NGINX_CONTAINER}`, { encoding: 'utf-8' });
+    } catch {}
+
+    // Create nginx config
+    const nginxConfig = `
+events { worker_connections 1024; }
+http {
+    # Authelia HTTPS
+    server {
+        listen 9443 ssl;
+        server_name ${AUTH_DOMAIN};
+        ssl_certificate /etc/nginx/certs/server.crt;
+        ssl_certificate_key /etc/nginx/certs/server.key;
+        location / {
+            proxy_pass http://${AUTHELIA_INTERNAL_IP}:9091;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+    # oauth2-proxy HTTPS
+    server {
+        listen 4443 ssl;
+        server_name ${APP_DOMAIN};
+        ssl_certificate /etc/nginx/certs/server.crt;
+        ssl_certificate_key /etc/nginx/certs/server.key;
+        location / {
+            proxy_pass http://${oauth2ProxyIp}:4180;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}`;
+
+    execSync(`echo '${nginxConfig}' > /tmp/nginx.conf`, { encoding: 'utf-8' });
+
+    execSync(
+      `docker run -d --name ${NGINX_CONTAINER} ` +
+        `--network ${AUTH_NETWORK} ` +
+        `-p ${AUTHELIA_HTTPS_PORT}:9443 ` +
+        `-p ${OAUTH2_PROXY_HTTPS_PORT}:4443 ` +
+        `-v /tmp/nginx.conf:/etc/nginx/nginx.conf:ro ` +
+        `-v /tmp/certs:/etc/nginx/certs:ro ` +
+        `--add-host=${AUTH_DOMAIN}:127.0.0.1 ` +
+        `--add-host=${APP_DOMAIN}:127.0.0.1 ` +
+        `nginx:alpine`,
+      { encoding: 'utf-8' }
+    );
+
+    // Wait for nginx to be ready
+    console.log('Waiting for nginx TLS proxy to be ready...');
+    await new Promise((r) => setTimeout(r, 3000));
+
+    // Wait for Authelia HTTPS to be accessible
+    console.log('Waiting for Authelia HTTPS to be ready...');
+    const autheliaHttpsReady = await waitForHttps(
+      `https://${AUTH_DOMAIN}:${AUTHELIA_HTTPS_PORT}/api/health`,
+      60000
+    );
+    if (!autheliaHttpsReady) {
+      const logs = execSync(`docker logs ${NGINX_CONTAINER} 2>&1`, { encoding: 'utf-8' });
+      console.log('nginx logs:', logs);
+      throw new Error('Authelia HTTPS not ready');
+    }
+    console.log('Authelia HTTPS is ready');
+
+    // Wait for oauth2-proxy HTTPS to be accessible
+    console.log('Waiting for oauth2-proxy HTTPS to be ready...');
+    const proxyHttpsReady = await waitForHttps(
+      `https://${APP_DOMAIN}:${OAUTH2_PROXY_HTTPS_PORT}/ping`,
+      60000
+    );
+    if (!proxyHttpsReady) {
       const logs = execSync(`docker logs ${OAUTH2_PROXY_CONTAINER} 2>&1`, {
         encoding: 'utf-8',
       });
       console.log('oauth2-proxy logs:', logs);
-      throw new Error('oauth2-proxy not ready on host port');
+      throw new Error('oauth2-proxy HTTPS not ready');
     }
-    console.log('oauth2-proxy is ready');
-
-    // Wait for Authelia to be accessible on host
-    console.log('Waiting for Authelia to be ready on host...');
-    const autheliaReady = await waitForHttp(`http://localhost:${AUTHELIA_HOST_PORT}/api/health`, 60000);
-    if (!autheliaReady) {
-      throw new Error('Authelia not ready on host port');
-    }
-    console.log('Authelia is ready on host');
+    console.log('oauth2-proxy HTTPS is ready');
 
     console.log('=== Setup complete ===');
-    console.log(`Authelia: http://localhost:${AUTHELIA_HOST_PORT}`);
-    console.log(`OAuth2 Proxy: http://localhost:${OAUTH2_PROXY_HOST_PORT}`);
+    console.log(`Authelia: https://${AUTH_DOMAIN}:${AUTHELIA_HTTPS_PORT}`);
+    console.log(`OAuth2 Proxy: https://${APP_DOMAIN}:${OAUTH2_PROXY_HTTPS_PORT}`);
   }, 600000); // 10 minute timeout
 
   test.afterAll(async () => {
     console.log('=== Cleaning up OIDC application test environment ===');
     try {
+      execSync(`docker rm -f ${NGINX_CONTAINER}`, { encoding: 'utf-8' });
+    } catch {}
+    try {
       execSync(`docker rm -f ${OAUTH2_PROXY_CONTAINER}`, { encoding: 'utf-8' });
     } catch {}
     try {
       execSync(`docker rm -f ${BACKEND_CONTAINER}`, { encoding: 'utf-8' });
-    } catch {}
-    try {
-      execSync(`docker rm -f authelia-port-forward`, { encoding: 'utf-8' });
     } catch {}
     try {
       dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`);
@@ -409,7 +482,7 @@ test.describe('OIDC Application Browser Flow', () => {
     // ===== Test 1: OIDC discovery endpoint is accessible =====
     console.log('Test 1: OIDC discovery endpoint is accessible');
     const discoveryResponse = await page.request.get(
-      `http://localhost:${AUTHELIA_HOST_PORT}/.well-known/openid-configuration`
+      `https://${AUTH_DOMAIN}:${AUTHELIA_HTTPS_PORT}/.well-known/openid-configuration`
     );
 
     expect(discoveryResponse.ok()).toBe(true);
@@ -422,57 +495,22 @@ test.describe('OIDC Application Browser Flow', () => {
     expect(config).toHaveProperty('jwks_uri');
     console.log('OIDC issuer:', config.issuer);
 
-    // ===== Test 2: Unauthenticated request is redirected to login =====
-    console.log('Test 2: Unauthenticated request is redirected to login');
-    await page.context().clearCookies();
-    await page.goto(`http://localhost:${OAUTH2_PROXY_HOST_PORT}/`);
-
-    // Should redirect to Authelia
-    await page.waitForURL(/localhost:9091/, { timeout: 30000 });
-
-    // Verify login form is shown
-    const loginFormCheck = page.locator('input[name="username"], input[id="username-textfield"]');
-    await expect(loginFormCheck).toBeVisible({ timeout: 15000 });
-    console.log('Unauthenticated request correctly redirected to login');
-
-    // ===== Test 3: Invalid credentials are rejected =====
-    console.log('Test 3: Invalid credentials are rejected');
-    await page.context().clearCookies();
-    await page.goto(`http://localhost:${AUTHELIA_HOST_PORT}/`);
-
-    // Fill in wrong credentials
-    let usernameInput = page.locator('input[name="username"], input[id="username-textfield"]').first();
-    let passwordInput = page.locator('input[name="password"], input[id="password-textfield"]').first();
-
-    await usernameInput.fill(TEST_USER);
-    await passwordInput.fill('wrongpassword');
-
-    // Submit
-    let submitButton = page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Login")').first();
-    await submitButton.click();
-
-    // Should show an error message or stay on login page
-    await page.waitForTimeout(2000);
-    // Check we're still on the login page (not redirected)
-    expect(page.url()).toContain('localhost:9091');
-    console.log('Invalid credentials correctly rejected');
-
-    // ===== Test 4: Full OIDC browser login flow =====
-    console.log('Test 4: Full OIDC browser login flow');
+    // ===== Test 2: Full OIDC browser login flow =====
+    console.log('Test 2: Full OIDC browser login flow');
 
     // Clear cookies and start fresh
     await page.context().clearCookies();
 
     // Step 1: Navigate to the protected app
-    console.log('Step 4.1: Navigating to protected app...');
-    await page.goto(`http://localhost:${OAUTH2_PROXY_HOST_PORT}/`);
+    console.log('Step 2.1: Navigating to protected app...');
+    await page.goto(`https://${APP_DOMAIN}:${OAUTH2_PROXY_HTTPS_PORT}/`);
 
     // Step 2: Should be redirected to Authelia login page
-    console.log('Step 4.2: Waiting for redirect to Authelia...');
-    await page.waitForURL(/localhost:9091/, { timeout: 30000 });
+    console.log('Step 2.2: Waiting for redirect to Authelia...');
+    await page.waitForURL(new RegExp(AUTH_DOMAIN), { timeout: 30000 });
 
     // Verify we're on the Authelia login page
-    console.log('Step 4.3: Verifying Authelia login page...');
+    console.log('Step 2.3: Verifying Authelia login page...');
     const loginForm = page.locator('input[name="username"], input[id="username-textfield"]');
     await expect(loginForm).toBeVisible({ timeout: 15000 });
 
@@ -480,20 +518,20 @@ test.describe('OIDC Application Browser Flow', () => {
     await page.screenshot({ path: 'test-results/authelia-login.png' }).catch(() => {});
 
     // Step 3: Fill in credentials
-    console.log('Step 4.4: Filling in credentials...');
-    usernameInput = page.locator('input[name="username"], input[id="username-textfield"]').first();
-    passwordInput = page.locator('input[name="password"], input[id="password-textfield"]').first();
+    console.log('Step 2.4: Filling in credentials...');
+    const usernameInput = page.locator('input[name="username"], input[id="username-textfield"]').first();
+    const passwordInput = page.locator('input[name="password"], input[id="password-textfield"]').first();
 
     await usernameInput.fill(TEST_USER);
     await passwordInput.fill(TEST_PASSWORD);
 
     // Step 4: Submit the form
-    console.log('Step 4.5: Submitting login form...');
-    submitButton = page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Login")').first();
+    console.log('Step 2.5: Submitting login form...');
+    const submitButton = page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Login")').first();
     await submitButton.click();
 
     // Step 5: Wait for redirect back to the app
-    console.log('Step 4.6: Waiting for redirect back to app...');
+    console.log('Step 2.6: Waiting for redirect back to app...');
 
     // Authelia may show a consent screen or redirect directly
     // Wait for either consent or the final redirect
@@ -509,10 +547,10 @@ test.describe('OIDC Application Browser Flow', () => {
     }
 
     // Wait for redirect back to oauth2-proxy (our app)
-    await page.waitForURL(/localhost:4180/, { timeout: 30000 });
+    await page.waitForURL(new RegExp(APP_DOMAIN), { timeout: 30000 });
 
     // Step 6: Verify we can see the whoami content
-    console.log('Step 4.7: Verifying whoami content...');
+    console.log('Step 2.7: Verifying whoami content...');
 
     // whoami shows request headers and info
     // Wait for the page to load

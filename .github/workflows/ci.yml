@@ -297,6 +297,12 @@ jobs:
           sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
 
+      - name: Setup /etc/hosts for OIDC testing
+        run: |
+          echo "127.0.0.1 auth.test.local" | sudo tee -a /etc/hosts
+          echo "127.0.0.1 app.test.local" | sudo tee -a /etc/hosts
+          cat /etc/hosts
+
       - name: Run OIDC application tests
         run: npx playwright test --project=oidc-app
         env:
