@@ -115,7 +115,7 @@ async function createLdapUser(
     }
   }
 
-  // Set user password
+  // Set user password - use the correct mutation for setting initial password
   const setPasswordQuery = `
     mutation SetPassword($userId: String!, $password: String!) {
       setPassword(userId: $userId, password: $password) {
@@ -124,7 +124,7 @@ async function createLdapUser(
     }
   `;
 
-  await fetch(`${lldapUrl}/api/graphql`, {
+  const passwordResponse = await fetch(`${lldapUrl}/api/graphql`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -138,6 +138,29 @@ async function createLdapUser(
       },
     }),
   });
+
+  const passwordResult = await passwordResponse.json();
+  if (passwordResult.errors) {
+    console.error('SetPassword errors:', JSON.stringify(passwordResult.errors, null, 2));
+  }
+  if (passwordResult.data?.setPassword?.ok !== true) {
+    console.error('SetPassword failed:', JSON.stringify(passwordResult, null, 2));
+  }
+
+  // Verify we can authenticate with the new password
+  const verifyResponse = await fetch(`${lldapUrl}/auth/simple/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: userId, password: password }),
+  });
+
+  if (!verifyResponse.ok) {
+    console.error(`Password verification failed! Status: ${verifyResponse.status}`);
+    const text = await verifyResponse.text();
+    console.error('Response:', text);
+  } else {
+    console.log(`Password verified for user: ${userId}`);
+  }
 
   console.log(`Created LDAP user: ${userId}`);
 }
