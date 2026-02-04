@@ -56,110 +56,58 @@ function getLdapCredentials(): Record<string, string> {
   return creds;
 }
 
-// Create user in LLDAP via GraphQL API
-async function createLdapUser(
-  lldapUrl: string,
+// Create user in LLDAP via GraphQL and set password via lldap_set_password
+function createLdapUser(
+  lldapContainer: string,
   adminPassword: string,
   userId: string,
   email: string,
   password: string
-): Promise<void> {
-  // Get auth token
-  const loginResponse = await fetch(`${lldapUrl}/auth/simple/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: adminPassword }),
-  });
+): void {
+  // Create user via GraphQL using curl from a container that can reach LLDAP
+  // First, get auth token
+  console.log('Getting LLDAP auth token...');
+  const tokenResult = execSync(
+    `docker exec ${lldapContainer} curl -s -X POST ` +
+      `-H "Content-Type: application/json" ` +
+      `-d '{"username":"admin","password":"${adminPassword}"}' ` +
+      `"http://localhost:17170/auth/simple/login"`,
+    { encoding: 'utf-8' }
+  );
+  const { token } = JSON.parse(tokenResult);
+  console.log('Got auth token');
 
-  if (!loginResponse.ok) {
-    throw new Error(`Failed to login to LLDAP: ${await loginResponse.text()}`);
+  // Create user via GraphQL
+  console.log(`Creating user ${userId}...`);
+  const createQuery = `{"query":"mutation CreateUser($user: CreateUserInput!) { createUser(user: $user) { id email } }","variables":{"user":{"id":"${userId}","email":"${email}","displayName":"${userId}","firstName":"Test","lastName":"User"}}}`;
+
+  const createResult = execSync(
+    `docker exec ${lldapContainer} curl -s -X POST ` +
+      `-H "Content-Type: application/json" ` +
+      `-H "Authorization: Bearer ${token}" ` +
+      `-d '${createQuery}' ` +
+      `"http://localhost:17170/api/graphql"`,
+    { encoding: 'utf-8' }
+  );
+
+  const createJson = JSON.parse(createResult);
+  if (createJson.errors && !createJson.errors[0]?.message?.includes('already exists')) {
+    console.log('Create user result:', createResult);
   }
 
-  const { token } = await loginResponse.json();
-
-  // Create user with all required attributes
-  const createUserQuery = `
-    mutation CreateUser($user: CreateUserInput!) {
-      createUser(user: $user) {
-        id
-        email
-        displayName
-      }
-    }
-  `;
-
-  const createResponse = await fetch(`${lldapUrl}/api/graphql`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      query: createUserQuery,
-      variables: {
-        user: {
-          id: userId,
-          email: email,
-          displayName: userId, // Set displayName same as userId for search
-          firstName: 'Test',
-          lastName: 'User',
-        },
-      },
-    }),
-  });
-
-  const createResult = await createResponse.json();
-  if (createResult.errors) {
-    if (!createResult.errors[0]?.message?.includes('already exists')) {
-      console.log('Create user result:', JSON.stringify(createResult, null, 2));
-    }
-  }
-
-  // Set user password - use the correct mutation for setting initial password
-  const setPasswordQuery = `
-    mutation SetPassword($userId: String!, $password: String!) {
-      setPassword(userId: $userId, password: $password) {
-        ok
-      }
-    }
-  `;
-
-  const passwordResponse = await fetch(`${lldapUrl}/api/graphql`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      query: setPasswordQuery,
-      variables: {
-        userId: userId,
-        password: password,
-      },
-    }),
-  });
-
-  const passwordResult = await passwordResponse.json();
-  if (passwordResult.errors) {
-    console.error('SetPassword errors:', JSON.stringify(passwordResult.errors, null, 2));
-  }
-  if (passwordResult.data?.setPassword?.ok !== true) {
-    console.error('SetPassword failed:', JSON.stringify(passwordResult, null, 2));
-  }
-
-  // Verify we can authenticate with the new password
-  const verifyResponse = await fetch(`${lldapUrl}/auth/simple/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: userId, password: password }),
-  });
-
-  if (!verifyResponse.ok) {
-    console.error(`Password verification failed! Status: ${verifyResponse.status}`);
-    const text = await verifyResponse.text();
-    console.error('Response:', text);
-  } else {
-    console.log(`Password verified for user: ${userId}`);
+  // Set password using lldap_set_password tool
+  console.log(`Setting password for ${userId}...`);
+  try {
+    execSync(
+      `docker exec ${lldapContainer} /app/lldap_set_password --base-url http://localhost:17170 ` +
+        `--admin-username admin --admin-password "${adminPassword}" ` +
+        `--username "${userId}" --password "${password}"`,
+      { encoding: 'utf-8', stdio: 'pipe' }
+    );
+    console.log(`Password set for user: ${userId}`);
+  } catch (e: any) {
+    console.error('lldap_set_password error:', e.stderr || e.message);
+    throw e;
   }
 
   console.log(`Created LDAP user: ${userId}`);
@@ -342,8 +290,9 @@ test.describe('Nextcloud LDAP Integration', () => {
     );
 
     // 4. Create test user in LLDAP
-    await createLdapUser(
-      LLDAP_URL,
+    const lldapContainer = `dokku.auth.directory.${SERVICE_NAME}`;
+    createLdapUser(
+      lldapContainer,
       creds.ADMIN_PASSWORD,
       TEST_USER,
       TEST_EMAIL,
