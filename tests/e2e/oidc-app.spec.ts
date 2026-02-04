@@ -216,6 +216,10 @@ test.describe('OIDC Application Browser Flow', () => {
       }
     }
 
+    // 2b. Configure Authelia domain to localhost so OIDC endpoints use localhost URLs
+    console.log('Configuring Authelia domain...');
+    dokku(`auth:frontend:config ${FRONTEND_SERVICE} DOMAIN=localhost:${AUTHELIA_HOST_PORT}`);
+
     // 3. Link frontend to directory
     console.log('Linking frontend to directory...');
     try {

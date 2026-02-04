@@ -120,6 +120,12 @@ generate_authelia_config() {
     COOKIE_DOMAIN="$DOMAIN"
   fi
 
+  # Determine URL scheme - use http for localhost (testing), https otherwise
+  local URL_SCHEME="https"
+  if [[ "$DOMAIN" == localhost* ]]; then
+    URL_SCHEME="http"
+  fi
+
   # Get LDAP settings if available
   local LDAP_URL="" LDAP_BASE_DN="" LDAP_BIND_DN="" LDAP_BIND_PASSWORD=""
   if [[ -f "$SERVICE_ROOT/DIRECTORY" ]]; then
@@ -212,8 +218,8 @@ session:
   secret: $SESSION_SECRET
   cookies:
     - domain: '$COOKIE_DOMAIN'
-      authelia_url: 'https://$DOMAIN'
-      default_redirection_url: 'https://$COOKIE_DOMAIN'
+      authelia_url: '$URL_SCHEME://$DOMAIN'
+      default_redirection_url: '$URL_SCHEME://$COOKIE_DOMAIN'
 
 regulation:
   max_retries: 3
