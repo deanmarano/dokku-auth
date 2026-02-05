@@ -17,7 +17,7 @@ const TEST_APP = 'ldap-app-test';
 const USE_SUDO = process.env.DOKKU_USE_SUDO === 'true';
 
 // Helper to run dokku commands
-function dokku(cmd: string): string {
+function dokku(cmd: string, opts?: { quiet?: boolean }): string {
   const dokkuCmd = USE_SUDO ? `sudo dokku ${cmd}` : `dokku ${cmd}`;
   console.log(`$ ${dokkuCmd}`);
   try {
@@ -25,7 +25,9 @@ function dokku(cmd: string): string {
     console.log(result);
     return result;
   } catch (error: any) {
-    console.error(`Failed:`, error.stderr || error.message);
+    if (!opts?.quiet) {
+      console.error(`Failed:`, error.stderr || error.message);
+    }
     throw error;
   }
 }
@@ -108,18 +110,14 @@ test.describe('App LDAP Integration', () => {
   test.afterAll(async () => {
     console.log('=== Cleaning up test environment ===');
     try {
-      dokku(`auth:unlink ${SERVICE_NAME} ${TEST_APP}`);
+      dokku(`auth:unlink ${SERVICE_NAME} ${TEST_APP}`, { quiet: true });
     } catch {}
     try {
-      dokku(`apps:destroy ${TEST_APP} --force`);
-    } catch (e) {
-      console.log('Failed to destroy app:', e);
-    }
+      dokku(`apps:destroy ${TEST_APP} --force`, { quiet: true });
+    } catch {}
     try {
-      dokku(`auth:destroy ${SERVICE_NAME} -f`);
-    } catch (e) {
-      console.log('Failed to destroy service:', e);
-    }
+      dokku(`auth:destroy ${SERVICE_NAME} -f`, { quiet: true });
+    } catch {}
   });
 
   test('LLDAP service should be healthy', async () => {

@@ -20,7 +20,7 @@ const OIDC_REDIRECT_URI = 'https://test-app.local/oauth2/callback';
 const USE_SUDO = process.env.DOKKU_USE_SUDO === 'true';
 
 // Helper to run dokku commands
-function dokku(cmd: string): string {
+function dokku(cmd: string, opts?: { quiet?: boolean }): string {
   const dokkuCmd = USE_SUDO ? `sudo dokku ${cmd}` : `dokku ${cmd}`;
   console.log(`$ ${dokkuCmd}`);
   try {
@@ -28,7 +28,9 @@ function dokku(cmd: string): string {
     console.log(result);
     return result;
   } catch (error: any) {
-    console.error(`Failed:`, error.stderr || error.message);
+    if (!opts?.quiet) {
+      console.error(`Failed:`, error.stderr || error.message);
+    }
     throw error;
   }
 }
@@ -174,15 +176,11 @@ test.describe('OIDC Client Integration', () => {
   test.afterAll(async () => {
     console.log('=== Cleaning up OIDC test environment ===');
     try {
-      dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`);
-    } catch (e) {
-      console.log('Failed to destroy frontend:', e);
-    }
+      dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true });
+    } catch {}
     try {
-      dokku(`auth:destroy ${DIRECTORY_SERVICE} -f`);
-    } catch (e) {
-      console.log('Failed to destroy directory:', e);
-    }
+      dokku(`auth:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
+    } catch {}
   });
 
   test('LLDAP directory service should be running', async () => {

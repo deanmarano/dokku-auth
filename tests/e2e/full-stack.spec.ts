@@ -14,11 +14,13 @@ const FRONTEND_NAME = `e2e-frontend-${Date.now()}`;
 const TEST_DOMAIN = process.env.TEST_DOMAIN || 'test.local';
 
 // Helper to run dokku commands
-function dokku(cmd: string): string {
+function dokku(cmd: string, opts?: { quiet?: boolean }): string {
   try {
     return execSync(`dokku ${cmd}`, { encoding: 'utf8', timeout: 120000 });
   } catch (error: any) {
-    console.error(`dokku ${cmd} failed:`, error.stderr);
+    if (!opts?.quiet) {
+      console.error(`dokku ${cmd} failed:`, error.stderr);
+    }
     throw error;
   }
 }
@@ -57,10 +59,10 @@ test.describe('Full Auth Stack E2E', () => {
   test.afterAll(async () => {
     // Cleanup
     try {
-      dokku(`auth:frontend:destroy ${FRONTEND_NAME} -f`);
+      dokku(`auth:frontend:destroy ${FRONTEND_NAME} -f`, { quiet: true });
     } catch {}
     try {
-      dokku(`auth:destroy ${SERVICE_NAME} -f`);
+      dokku(`auth:destroy ${SERVICE_NAME} -f`, { quiet: true });
     } catch {}
   });
 
