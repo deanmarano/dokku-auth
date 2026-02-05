@@ -97,7 +97,7 @@ provider_create_ou() {
   BASE_DN=$(cat "$CONFIG_DIR/BASE_DN")
   ADMIN_PASSWORD=$(cat "$CONFIG_DIR/ADMIN_PASSWORD")
 
-  if ! docker exec "$CONTAINER_NAME" ldapadd -x -H ldap://localhost -D "cn=admin,$BASE_DN" -w "$ADMIN_PASSWORD" <<EOF 2>&1; then
+  if ! docker exec -i "$CONTAINER_NAME" ldapadd -x -H ldap://localhost -D "cn=admin,$BASE_DN" -w "$ADMIN_PASSWORD" <<EOF 2>&1; then
 dn: ou=$OU_NAME,$BASE_DN
 objectClass: organizationalUnit
 ou: $OU_NAME
@@ -197,7 +197,7 @@ provider_create_group() {
   BASE_DN=$(cat "$CONFIG_DIR/BASE_DN")
   ADMIN_PASSWORD=$(cat "$CONFIG_DIR/ADMIN_PASSWORD")
 
-  if ! docker exec "$CONTAINER_NAME" ldapadd -x -H ldap://localhost -D "cn=admin,$BASE_DN" -w "$ADMIN_PASSWORD" <<EOF 2>&1; then
+  if ! docker exec -i "$CONTAINER_NAME" ldapadd -x -H ldap://localhost -D "cn=admin,$BASE_DN" -w "$ADMIN_PASSWORD" <<EOF 2>&1; then
 dn: cn=$GROUP_NAME,ou=groups,$BASE_DN
 objectClass: groupOfNames
 cn: $GROUP_NAME
@@ -241,7 +241,7 @@ provider_add_user_to_group() {
   BASE_DN=$(cat "$CONFIG_DIR/BASE_DN")
   ADMIN_PASSWORD=$(cat "$CONFIG_DIR/ADMIN_PASSWORD")
 
-  docker exec "$CONTAINER_NAME" ldapmodify -x -H ldap://localhost -D "cn=admin,$BASE_DN" -w "$ADMIN_PASSWORD" <<EOF 2>/dev/null || true
+  docker exec -i "$CONTAINER_NAME" ldapmodify -x -H ldap://localhost -D "cn=admin,$BASE_DN" -w "$ADMIN_PASSWORD" <<EOF 2>/dev/null || true
 dn: cn=$GROUP_NAME,ou=groups,$BASE_DN
 changetype: modify
 add: member
