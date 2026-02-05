@@ -81,11 +81,11 @@ EOF
     -v "$CONFIG_DIR/glauth.cfg:/app/config/config.cfg:ro" \
     "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION" >/dev/null
 
-  # Wait for container to be ready
+  # Wait for container to be ready (GLAuth image is minimal, check process)
   echo "-----> Waiting for GLAuth to be ready"
   local retries=30
   while [[ $retries -gt 0 ]]; do
-    if docker exec "$CONTAINER_NAME" /bin/sh -c "nc -z localhost 3893" 2>/dev/null; then
+    if docker top "$CONTAINER_NAME" 2>/dev/null | grep -q glauth; then
       break
     fi
     sleep 1
@@ -138,10 +138,12 @@ provider_verify() {
     return 1
   fi
 
-  if docker exec "$CONTAINER_NAME" /bin/sh -c "nc -z localhost 3893" 2>/dev/null; then
-    echo "       LDAP port responding"
+  # GLAuth is a minimal image without netcat/ldapsearch
+  # Verify by checking the container is running and the process exists
+  if docker top "$CONTAINER_NAME" 2>/dev/null | grep -q glauth; then
+    echo "       GLAuth process running"
   else
-    echo "!     LDAP port not responding" >&2
+    echo "!     GLAuth process not found" >&2
     return 1
   fi
 

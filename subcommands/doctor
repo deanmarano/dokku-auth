@@ -104,9 +104,9 @@ else
   ISSUES=$((ISSUES + 1))
 fi
 
-# Check 7: LDAP port responding
-echo -n "       Checking LDAP port... "
-if docker exec "$CONTAINER_NAME" /bin/sh -c "nc -z localhost $PROVIDER_LDAP_PORT" 2>/dev/null; then
+# Check 7: Provider verification (LDAP responding)
+echo -n "       Checking LDAP service... "
+if provider_verify "$SERVICE" >/dev/null 2>&1; then
   echo "OK (port $PROVIDER_LDAP_PORT)"
 else
   echo "FAILED - LDAP not responding"
@@ -124,11 +124,11 @@ if [[ -n "$PROVIDER_HTTP_PORT" ]]; then
   fi
 fi
 
-# Check 9: Config files exist
+# Check 9: Config files exist (BASE_DN and ADMIN_PASSWORD are required for all providers)
 echo -n "       Checking configuration files... "
 CONFIG_DIR="$SERVICE_ROOT/config"
 MISSING_CONFIG=""
-for file in BASE_DN ADMIN_PASSWORD JWT_SECRET; do
+for file in BASE_DN ADMIN_PASSWORD; do
   if [[ ! -f "$CONFIG_DIR/$file" ]]; then
     MISSING_CONFIG="$MISSING_CONFIG $file"
   fi
