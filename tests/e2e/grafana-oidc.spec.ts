@@ -465,7 +465,8 @@ http {
 
     const user = await userResponse.json();
     console.log('Grafana user:', JSON.stringify(user));
-    expect(user.login).toBe(TEST_USER);
+    // Grafana Generic OAuth sets login to the email address
+    expect(user.login).toBe(TEST_EMAIL);
 
     console.log('All Grafana OIDC browser tests passed!');
   });

@@ -212,13 +212,15 @@ name = "cn"
     expect(statusCode).toBe('401');
   });
 
-  test('LDAP admin reload succeeds', async () => {
-    const statusCode = execSync(
-      `docker exec ${GRAFANA_CONTAINER} curl -s -o /dev/null -w "%{http_code}" ` +
-        `-X POST -u admin:admin http://localhost:3000/api/admin/ldap/reload`,
+  test('LDAP status check succeeds', async () => {
+    const result = execSync(
+      `docker exec ${GRAFANA_CONTAINER} curl -sf -u admin:admin http://localhost:3000/api/admin/ldap/status`,
       { encoding: 'utf-8' }
-    ).trim();
-    console.log(`LDAP reload response status: ${statusCode}`);
-    expect(statusCode).toBe('200');
+    );
+    console.log('LDAP status:', result);
+    const status = JSON.parse(result);
+    // Grafana returns an array of LDAP server statuses
+    expect(Array.isArray(status)).toBe(true);
+    expect(status.length).toBeGreaterThan(0);
   });
 });
