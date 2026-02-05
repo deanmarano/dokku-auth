@@ -10,7 +10,7 @@ const SHARED_SERVICE = process.env.E2E_SERVICE_NAME || 'e2e-shared';
 const SKIP_SETUP = process.env.SKIP_GLOBAL_SETUP === 'true';
 const USE_SUDO = process.env.DOKKU_USE_SUDO === 'true';
 
-function dokku(cmd: string): string {
+function dokku(cmd: string, opts?: { quiet?: boolean }): string {
   const dokkuCmd = USE_SUDO ? `sudo dokku ${cmd}` : `dokku ${cmd}`;
   console.log(`[setup] ${dokkuCmd}`);
   try {
@@ -24,7 +24,9 @@ function dokku(cmd: string): string {
     if (error.stderr?.includes('already exists') || error.stdout?.includes('already exists')) {
       return error.stdout || '';
     }
-    console.error(`Command failed: ${error.stderr || error.message}`);
+    if (!opts?.quiet) {
+      console.error(`Command failed: ${error.stderr || error.message}`);
+    }
     throw error;
   }
 }
@@ -33,7 +35,7 @@ async function waitForService(maxWait = 60000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < maxWait) {
     try {
-      const status = dokku(`auth:status ${SHARED_SERVICE}`);
+      const status = dokku(`auth:status ${SHARED_SERVICE}`, { quiet: true });
       if (status.includes('healthy')) {
         return true;
       }
@@ -59,11 +61,11 @@ async function globalSetup() {
 
   // First, install the plugin if not already installed
   try {
-    dokku('plugin:list');
-    const plugins = dokku('plugin:list');
+    dokku('plugin:list', { quiet: true });
+    const plugins = dokku('plugin:list', { quiet: true });
     if (!plugins.includes('auth')) {
       console.log('Installing auth plugin...');
-      dokku('plugin:install file:///plugin-src --name auth');
+      dokku('plugin:install file:///plugin-src --name auth', { quiet: true });
     }
   } catch (error) {
     console.log('Could not check/install plugin, continuing...');
@@ -71,7 +73,7 @@ async function globalSetup() {
 
   // Check if service already exists
   try {
-    const status = dokku(`auth:status ${SHARED_SERVICE}`);
+    const status = dokku(`auth:status ${SHARED_SERVICE}`, { quiet: true });
     if (status.includes('healthy')) {
       console.log('Shared service already healthy');
       return;
@@ -101,7 +103,7 @@ async function globalSetup() {
 
   // Verify service
   try {
-    const doctorResult = dokku(`auth:doctor ${SHARED_SERVICE}`);
+    const doctorResult = dokku(`auth:doctor ${SHARED_SERVICE}`, { quiet: true });
     console.log('Doctor result:', doctorResult);
   } catch (error) {
     console.log('Doctor check had issues, continuing anyway...');

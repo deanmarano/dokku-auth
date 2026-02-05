@@ -12,13 +12,15 @@ const SHARED_SERVICE = process.env.E2E_SERVICE_NAME || 'e2e-shared';
 const CLEANUP = process.env.E2E_CLEANUP === 'true';
 const USE_SUDO = process.env.DOKKU_USE_SUDO === 'true';
 
-function dokku(cmd: string): string {
+function dokku(cmd: string, opts?: { quiet?: boolean }): string {
   const dokkuCmd = USE_SUDO ? `sudo dokku ${cmd}` : `dokku ${cmd}`;
   console.log(`[teardown] ${dokkuCmd}`);
   try {
     return execSync(dokkuCmd, { encoding: 'utf8', timeout: 120000 });
   } catch (error: any) {
-    console.error(`Command failed: ${error.message}`);
+    if (!opts?.quiet) {
+      console.error(`Command failed: ${error.message}`);
+    }
     return '';
   }
 }
@@ -41,7 +43,7 @@ async function globalTeardown() {
 
   // Destroy shared service
   console.log('Destroying shared service...');
-  dokku(`auth:destroy ${SHARED_SERVICE} -f`);
+  dokku(`auth:destroy ${SHARED_SERVICE} -f`, { quiet: true });
 
   console.log('=== Teardown Complete ===');
 }
