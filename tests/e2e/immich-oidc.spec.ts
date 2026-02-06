@@ -300,20 +300,31 @@ http {
       { encoding: 'utf-8' }
     );
 
-    // Wait for Immich to be ready
-    console.log('Waiting for Immich to be ready...');
+    // Wait for Immich to be ready (it imports geodata on first start which takes time)
+    console.log('Waiting for Immich to be ready (this may take a while due to geodata import)...');
     let immichReady = false;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 150; i++) {  // Up to 5 minutes
       try {
         const result = execSync(
-          `docker exec ${IMMICH_CONTAINER} curl -sf http://localhost:3001/api/server-info/ping`,
-          { encoding: 'utf-8', timeout: 5000 }
+          `docker exec ${IMMICH_CONTAINER} wget -q -O - http://localhost:3001/api/server-info/ping 2>/dev/null`,
+          { encoding: 'utf-8', timeout: 10000 }
         );
         if (result.includes('pong')) {
           immichReady = true;
           break;
         }
-      } catch {}
+      } catch {
+        // Log progress every 30 seconds
+        if (i > 0 && i % 15 === 0) {
+          try {
+            const logs = execSync(`docker logs ${IMMICH_CONTAINER} 2>&1 | tail -5`, {
+              encoding: 'utf-8',
+              timeout: 5000,
+            });
+            console.log(`Immich startup progress (${i * 2}s):`, logs.trim().split('\n').pop());
+          } catch {}
+        }
+      }
       await new Promise((r) => setTimeout(r, 2000));
     }
 
