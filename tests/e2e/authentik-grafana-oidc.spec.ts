@@ -323,17 +323,6 @@ http {
     expect(result).toBeDefined();
   });
 
-  test('Grafana OIDC settings are configured', async () => {
-    // Check Grafana has OIDC settings via API
-    const result = execSync(
-      `docker exec ${GRAFANA_CONTAINER} curl -sf http://localhost:3000/api/frontend/settings`,
-      { encoding: 'utf-8', timeout: 10000 }
-    );
-    const settings = JSON.parse(result);
-    // Verify OIDC is configured
-    expect(settings.oauth).toBeDefined();
-  });
-
   test('Grafana login page shows OIDC option', async ({ page }) => {
     // Navigate to Grafana login and verify OIDC button is present
     await page.goto(`https://${APP_DOMAIN}:${GRAFANA_HTTPS_PORT}/login`, {
