@@ -10,13 +10,14 @@ source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 
 SERVICE="$1"
+shift || true  # Remove service name from args
 
 if [[ -z "$SERVICE" ]]; then
   echo "Usage: dokku auth:frontend:logs <service> [options]" >&2
   echo "" >&2
   echo "Options:" >&2
-  echo "  -t, --tail NUM   Number of lines to show" >&2
-  echo "  -f, --follow     Follow log output" >&2
+  echo "  --tail NUM   Number of lines to show" >&2
+  echo "  -f, --follow Follow log output" >&2
   exit 1
 fi
 
@@ -25,6 +26,25 @@ if ! frontend_service_exists "$SERVICE"; then
   exit 1
 fi
 
+# Convert common options to docker logs format
+DOCKER_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -n|--tail)
+      DOCKER_ARGS+=(--tail "$2")
+      shift 2
+      ;;
+    -t|--follow|-f)
+      DOCKER_ARGS+=(--follow)
+      shift
+      ;;
+    *)
+      DOCKER_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
 load_frontend_provider "$SERVICE"
 
-provider_logs "$SERVICE" "$@"
+provider_logs "$SERVICE" "${DOCKER_ARGS[@]}"
