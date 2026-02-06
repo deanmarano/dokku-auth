@@ -221,8 +221,40 @@ test.describe('Jellyfin LDAP Integration', () => {
       );
     } catch {}
 
-    // Wait a moment for Jellyfin to restart after setup
+    // Restart Jellyfin to ensure plugin is loaded
+    console.log('Restarting Jellyfin to load LDAP plugin...');
+    execSync(`docker restart ${JELLYFIN_CONTAINER}`, { encoding: 'utf-8' });
+
+    // Wait for Jellyfin to be ready again
+    let restartReady = false;
+    for (let i = 0; i < 60; i++) {
+      try {
+        const result = execSync(
+          `docker exec ${JELLYFIN_CONTAINER} curl -sf http://localhost:8096/health`,
+          { encoding: 'utf-8', timeout: 5000 }
+        );
+        if (result.includes('Healthy')) {
+          restartReady = true;
+          break;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    if (!restartReady) {
+      throw new Error('Jellyfin not ready after restart');
+    }
+
+    // Give it a moment for plugins to fully initialize
     await new Promise((r) => setTimeout(r, 5000));
+
+    // Verify LDAP plugin is loaded
+    try {
+      const plugins = execSync(
+        `docker exec ${JELLYFIN_CONTAINER} curl -s http://localhost:8096/Plugins`,
+        { encoding: 'utf-8' }
+      );
+      console.log('Loaded plugins:', plugins);
+    } catch {}
 
     console.log('=== Setup complete ===');
   });
@@ -270,6 +302,23 @@ test.describe('Jellyfin LDAP Integration', () => {
     );
 
     console.log('LDAP Auth result:', authResult);
+
+    // Check if it's an error response
+    if (authResult.startsWith('Error') || authResult.includes('"Message"')) {
+      // Get Jellyfin logs for debugging
+      const logs = execSync(`docker logs ${JELLYFIN_CONTAINER} 2>&1 | tail -30`, {
+        encoding: 'utf-8',
+      });
+      console.log('Jellyfin logs:', logs);
+
+      // Also check LDAP connection
+      const ldapLogs = execSync(`docker logs dokku.auth.directory.${SERVICE_NAME} 2>&1 | tail -20`, {
+        encoding: 'utf-8',
+      });
+      console.log('LLDAP logs:', ldapLogs);
+
+      throw new Error(`LDAP authentication failed: ${authResult}`);
+    }
 
     const auth = JSON.parse(authResult);
     expect(auth.AccessToken).toBeTruthy();

@@ -453,7 +453,34 @@ http {
     }
     console.log('Authentik HTTPS is ready');
 
-    // 4. Configure Authentik with OAuth2 provider and application
+    // 4. Wait for Authentik flows to be created (they're created asynchronously)
+    console.log('Waiting for Authentik flows to be available...');
+    let flowsReady = false;
+    for (let i = 0; i < 60; i++) {
+      try {
+        const flowsResult = authentikApiRequest(
+          authentikContainerName,
+          'GET',
+          '/api/v3/flows/instances/?designation=authorization',
+          AUTHENTIK_BOOTSTRAP_TOKEN
+        );
+        const flows = JSON.parse(flowsResult);
+        if (flows.results && flows.results.length > 0) {
+          flowsReady = true;
+          console.log(`Found ${flows.results.length} authorization flows`);
+          break;
+        }
+        console.log('No authorization flows yet, waiting...');
+      } catch (e) {
+        console.log('Error checking flows:', e);
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    if (!flowsReady) {
+      throw new Error('Authentik flows not ready after waiting');
+    }
+
+    // Configure Authentik with OAuth2 provider and application
     console.log('Configuring Authentik OAuth2...');
     const appSlug = `grafana-oidc-${Date.now()}`;
     const redirectUri = `https://${APP_DOMAIN}:${GRAFANA_HTTPS_PORT}/login/generic_oauth`;

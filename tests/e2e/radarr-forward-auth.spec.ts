@@ -163,20 +163,36 @@ test.describe('Radarr Forward Auth Integration', () => {
       { encoding: 'utf-8' }
     );
 
-    // Wait for Radarr to be ready
+    // Wait for Radarr to be ready (linuxserver images use Alpine, use wget instead of curl)
     console.log('Waiting for Radarr to be ready...');
     let radarrReady = false;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 90; i++) {
       try {
+        // Check if Radarr is responding - linuxserver/radarr has wget not curl
         const result = execSync(
-          `docker exec ${RADARR_CONTAINER} curl -sf http://localhost:7878/ping`,
-          { encoding: 'utf-8', timeout: 5000 }
+          `docker exec ${RADARR_CONTAINER} wget -q -O - http://localhost:7878/api/v3/system/status 2>/dev/null || docker exec ${RADARR_CONTAINER} wget -q --spider http://localhost:7878 2>&1`,
+          { encoding: 'utf-8', timeout: 10000 }
         );
-        if (result.includes('Pong')) {
-          radarrReady = true;
-          break;
-        }
-      } catch {}
+        // Any response means Radarr is up
+        radarrReady = true;
+        console.log('Radarr health check passed');
+        break;
+      } catch {
+        // Also check container logs for "Application started"
+        try {
+          const logs = execSync(`docker logs ${RADARR_CONTAINER} 2>&1 | tail -5`, {
+            encoding: 'utf-8',
+            timeout: 5000,
+          });
+          if (logs.includes('Application started') || logs.includes('ls.io-init] done')) {
+            // Give it a moment after startup
+            await new Promise((r) => setTimeout(r, 3000));
+            radarrReady = true;
+            console.log('Radarr detected as started from logs');
+            break;
+          }
+        } catch {}
+      }
       await new Promise((r) => setTimeout(r, 2000));
     }
 

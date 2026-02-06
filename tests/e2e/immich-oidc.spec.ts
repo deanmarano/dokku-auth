@@ -174,14 +174,16 @@ test.describe('Immich OIDC Integration', () => {
       } catch {}
     }
 
-    // PostgreSQL for Immich
+    // PostgreSQL for Immich (requires pgvecto.rs extension)
+    // Use Immich's postgres image which includes the vector extension
     execSync(
       `docker run -d --name ${IMMICH_POSTGRES} ` +
         `--network ${AUTH_NETWORK} ` +
         `-e POSTGRES_USER=immich ` +
         `-e POSTGRES_PASSWORD=immich ` +
         `-e POSTGRES_DB=immich ` +
-        `postgres:15-alpine`,
+        `-e POSTGRES_INITDB_ARGS="--data-checksums" ` +
+        `tensorchord/pgvecto-rs:pg16-v0.2.1`,
       { encoding: 'utf-8' }
     );
 
