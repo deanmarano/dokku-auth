@@ -164,11 +164,11 @@ provider_create_container() {
     worker >/dev/null
 
   # Wait for Authentik to be ready
+  # Authentik containers have a built-in healthcheck command 'ak healthcheck'
   echo "-----> Waiting for Authentik to be ready"
-  local retries=60
+  local retries=90
   while [[ $retries -gt 0 ]]; do
-    if docker exec "$SERVER_CONTAINER" wget -q --spider http://localhost:9000/-/health/ready/ 2>/dev/null || \
-       docker exec "$SERVER_CONTAINER" curl -sf http://localhost:9000/-/health/ready/ >/dev/null 2>&1; then
+    if docker exec "$SERVER_CONTAINER" ak healthcheck 2>/dev/null; then
       break
     fi
     sleep 2
@@ -177,7 +177,7 @@ provider_create_container() {
 
   if [[ $retries -eq 0 ]]; then
     echo "!     Authentik failed to start" >&2
-    docker logs "$SERVER_CONTAINER" 2>&1 | tail -20 >&2
+    docker logs "$SERVER_CONTAINER" 2>&1 | tail -30 >&2
     return 1
   fi
 
@@ -237,8 +237,7 @@ provider_verify() {
   local retries=15
   while [[ $retries -gt 0 ]]; do
     if docker ps -q -f "name=^${SERVER_CONTAINER}$" | grep -q .; then
-      if docker exec "$SERVER_CONTAINER" wget -q --spider http://localhost:9000/-/health/ready/ 2>/dev/null || \
-         docker exec "$SERVER_CONTAINER" curl -sf http://localhost:9000/-/health/ready/ >/dev/null 2>&1; then
+      if docker exec "$SERVER_CONTAINER" ak healthcheck 2>/dev/null; then
         echo "       Authentik server responding"
         return 0
       fi
@@ -520,7 +519,7 @@ provider_apply_config() {
   # Wait for ready
   local retries=30
   while [[ $retries -gt 0 ]]; do
-    if docker exec "$SERVER_CONTAINER" wget -q --spider http://localhost:9000/-/health/ready/ 2>/dev/null; then
+    if docker exec "$SERVER_CONTAINER" ak healthcheck 2>/dev/null; then
       break
     fi
     sleep 2
