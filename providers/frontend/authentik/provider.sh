@@ -70,8 +70,8 @@ provider_create_container() {
   done
 
   # Set permissions for Authentik data directories (Authentik runs as UID 1000)
-  chown -R 1000:1000 "$DATA_DIR/media" "$DATA_DIR/templates" "$DATA_DIR/certs" 2>/dev/null || true
-  chmod -R 755 "$DATA_DIR/media" "$DATA_DIR/templates" "$DATA_DIR/certs" 2>/dev/null || true
+  # Use world-writable permissions since we can't chown as dokku user
+  chmod -R 777 "$DATA_DIR/media" "$DATA_DIR/templates" "$DATA_DIR/certs" 2>/dev/null || true
 
   # Pull required images
   echo "-----> Pulling PostgreSQL image"
