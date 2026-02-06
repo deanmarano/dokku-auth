@@ -83,14 +83,15 @@ test.describe('Jellyfin LDAP Integration', () => {
     // 3. Create Jellyfin config directory with LDAP plugin
     console.log('Setting up Jellyfin LDAP plugin...');
     const jellyfinConfigDir = '/tmp/jellyfin-ldap-config';
-    const pluginDir = `${jellyfinConfigDir}/plugins/LDAP Authentication`;
+    // Plugin needs version subdirectory: /plugins/LDAP Authentication/<version>/
+    const pluginVersion = '18.0.0.0';
+    const pluginDir = `${jellyfinConfigDir}/plugins/LDAP Authentication/${pluginVersion}`;
     fs.mkdirSync(pluginDir, { recursive: true });
     fs.mkdirSync(`${jellyfinConfigDir}/plugins/configurations`, { recursive: true });
 
     // Download LDAP plugin from Jellyfin's official repository
     // Plugin GUID: 958aad66-3571-4f06-b21d-97a497be2005
     console.log('Downloading LDAP Authentication plugin...');
-    const pluginVersion = '18.0.0.0';
     const pluginUrl = `https://repo.jellyfin.org/releases/plugin/ldap-authentication/ldap-authentication_${pluginVersion}.zip`;
 
     execSync(
@@ -100,14 +101,23 @@ test.describe('Jellyfin LDAP Integration', () => {
     );
     console.log('LDAP plugin downloaded and extracted');
 
-    // Create plugin meta.json (required for Jellyfin to recognize the plugin)
+    // List what we extracted
+    try {
+      const files = execSync(`ls -la "${pluginDir}"`, { encoding: 'utf-8' });
+      console.log('Plugin directory contents:', files);
+    } catch {}
+
+    // Create plugin meta.json in parent directory (required for Jellyfin to recognize the plugin)
     const pluginMeta = {
       guid: '958aad66-3571-4f06-b21d-97a497be2005',
       name: 'LDAP Authentication',
       version: pluginVersion,
       status: 'Active',
     };
-    fs.writeFileSync(`${pluginDir}/meta.json`, JSON.stringify(pluginMeta, null, 2));
+    fs.writeFileSync(
+      `${jellyfinConfigDir}/plugins/LDAP Authentication/meta.json`,
+      JSON.stringify(pluginMeta, null, 2)
+    );
 
     // LDAP plugin configuration XML
     const ldapPluginConfig = `<?xml version="1.0" encoding="utf-8"?>
