@@ -126,6 +126,30 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       timeout: 300000, // 5 minutes
     },
+
+    // Authentik frontend provider tests
+    {
+      name: 'authentik',
+      testMatch: ['authentik.spec.ts'],
+      use: { ...devices['Desktop Chrome'] },
+      timeout: 600000, // 10 minutes (Authentik startup is slow)
+    },
+
+    // Authentik + Grafana LDAP integration tests
+    {
+      name: 'authentik-grafana-ldap',
+      testMatch: ['authentik-grafana-ldap.spec.ts'],
+      use: { ...devices['Desktop Chrome'] },
+      timeout: 600000, // 10 minutes
+    },
+
+    // Authentik + Grafana OIDC integration tests
+    {
+      name: 'authentik-grafana-oidc',
+      testMatch: ['authentik-grafana-oidc.spec.ts'],
+      use: { ...devices['Desktop Chrome'] },
+      timeout: 600000, // 10 minutes
+    },
   ],
 
   // Output directory for test artifacts

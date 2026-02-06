@@ -570,3 +570,218 @@ jobs:
           sudo dokku auth:list 2>/dev/null || true
           echo "=== OpenLDAP logs ==="
           sudo dokku auth:logs openldap-e2e-test -n 100 2>/dev/null || true
+
+  e2e-authentik:
+    name: E2E - Authentik Provider
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Dokku
+        run: |
+          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
+          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          dokku version
+
+      - name: Install dokku postgres plugin
+        run: sudo dokku plugin:install https://github.com/dokku/dokku-postgres.git postgres
+
+      - name: Install dokku redis plugin
+        run: sudo dokku plugin:install https://github.com/dokku/dokku-redis.git redis
+
+      - name: Install plugin
+        run: |
+          sudo mkdir -p /var/lib/dokku/plugins/available/auth
+          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
+          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
+          sudo mkdir -p /var/lib/dokku/services/auth
+          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
+          sudo dokku plugin:install-dependencies auth || true
+
+      - name: Run Authentik tests
+        run: npx playwright test --project=authentik
+        env:
+          CI: true
+          DOKKU_HOST: local
+          DOKKU_USE_SUDO: 'true'
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-authentik
+          path: test-results/
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker containers ==="
+          docker ps -a
+          echo "=== Auth services ==="
+          sudo dokku auth:list 2>/dev/null || true
+          sudo dokku auth:frontend:list 2>/dev/null || true
+          echo "=== Authentik server logs ==="
+          docker logs dokku.auth.frontend.authentik-e2e-test 2>&1 | tail -100 || true
+          echo "=== Authentik worker logs ==="
+          docker logs dokku.auth.frontend.authentik-e2e-test.worker 2>&1 | tail -100 || true
+          echo "=== PostgreSQL status ==="
+          sudo dokku postgres:list 2>/dev/null || true
+          echo "=== Redis status ==="
+          sudo dokku redis:list 2>/dev/null || true
+
+  e2e-authentik-grafana-ldap:
+    name: E2E - Authentik + Grafana LDAP
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Dokku
+        run: |
+          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
+          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          dokku version
+
+      - name: Install dokku postgres plugin
+        run: sudo dokku plugin:install https://github.com/dokku/dokku-postgres.git postgres
+
+      - name: Install dokku redis plugin
+        run: sudo dokku plugin:install https://github.com/dokku/dokku-redis.git redis
+
+      - name: Install plugin
+        run: |
+          sudo mkdir -p /var/lib/dokku/plugins/available/auth
+          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
+          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
+          sudo mkdir -p /var/lib/dokku/services/auth
+          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
+          sudo dokku plugin:install-dependencies auth || true
+
+      - name: Run Authentik + Grafana LDAP tests
+        run: npx playwright test --project=authentik-grafana-ldap
+        env:
+          CI: true
+          DOKKU_HOST: local
+          DOKKU_USE_SUDO: 'true'
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-authentik-grafana-ldap
+          path: test-results/
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker containers ==="
+          docker ps -a
+          echo "=== Auth services ==="
+          sudo dokku auth:list 2>/dev/null || true
+          sudo dokku auth:frontend:list 2>/dev/null || true
+          echo "=== Authentik logs ==="
+          docker logs dokku.auth.frontend.ak-graf-ldap-fe 2>&1 | tail -100 || true
+          echo "=== Grafana logs ==="
+          docker logs authentik-grafana-ldap-test 2>&1 | tail -100 || true
+
+  e2e-authentik-grafana-oidc:
+    name: E2E - Authentik + Grafana OIDC
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Dokku
+        run: |
+          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
+          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          dokku version
+
+      - name: Install dokku postgres plugin
+        run: sudo dokku plugin:install https://github.com/dokku/dokku-postgres.git postgres
+
+      - name: Install dokku redis plugin
+        run: sudo dokku plugin:install https://github.com/dokku/dokku-redis.git redis
+
+      - name: Install plugin
+        run: |
+          sudo mkdir -p /var/lib/dokku/plugins/available/auth
+          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
+          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
+          sudo mkdir -p /var/lib/dokku/services/auth
+          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
+          sudo dokku plugin:install-dependencies auth || true
+
+      - name: Setup /etc/hosts for OIDC testing
+        run: |
+          echo "127.0.0.1 authentik-grafana.test.local" | sudo tee -a /etc/hosts
+          echo "127.0.0.1 grafana-authentik.test.local" | sudo tee -a /etc/hosts
+          cat /etc/hosts
+
+      - name: Run Authentik + Grafana OIDC tests
+        run: npx playwright test --project=authentik-grafana-oidc
+        env:
+          CI: true
+          DOKKU_HOST: local
+          DOKKU_USE_SUDO: 'true'
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-authentik-grafana-oidc
+          path: test-results/
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker containers ==="
+          docker ps -a
+          echo "=== Auth services ==="
+          sudo dokku auth:list 2>/dev/null || true
+          sudo dokku auth:frontend:list 2>/dev/null || true
+          echo "=== Authentik server logs ==="
+          docker logs dokku.auth.frontend.ak-graf-oidc-fe 2>&1 | tail -100 || true
+          echo "=== Authentik worker logs ==="
+          docker logs dokku.auth.frontend.ak-graf-oidc-fe.worker 2>&1 | tail -100 || true
+          echo "=== Grafana logs ==="
+          docker logs grafana-authentik-oidc-test 2>&1 | tail -100 || true
+          echo "=== nginx logs ==="
+          docker logs nginx-authentik-grafana-proxy 2>&1 | tail -100 || true

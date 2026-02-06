@@ -8,11 +8,56 @@ source "$PLUGIN_BASE_PATH/providers/loader.sh"
 # Strip command prefix if dokku passed it
 [[ "${1:-}" == auth:* ]] && shift
 
-
-SERVICE="$1"
+# Parse arguments
+SERVICE=""
+PROVIDER=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --provider)
+      PROVIDER="$2"
+      shift 2
+      ;;
+    --provider=*)
+      PROVIDER="${1#*=}"
+      shift
+      ;;
+    -*)
+      echo "!     Unknown option: $1" >&2
+      exit 1
+      ;;
+    *)
+      SERVICE="$1"
+      shift
+      ;;
+  esac
+done
 
 if [[ -z "$SERVICE" ]]; then
-  echo "Usage: dokku auth:frontend:create <service>" >&2
+  echo "Usage: dokku auth:frontend:create <service> [--provider <provider>]" >&2
+  echo "" >&2
+  echo "Create a new frontend auth service" >&2
+  echo "" >&2
+  echo "Options:" >&2
+  echo "  --provider <provider>  Frontend provider to use (default: $DEFAULT_FRONTEND_PROVIDER)" >&2
+  echo "                         Available: $(list_frontend_providers | tr '\n' ' ')" >&2
+  exit 1
+fi
+
+# Use default provider if not specified
+if [[ -z "$PROVIDER" ]]; then
+  PROVIDER="$DEFAULT_FRONTEND_PROVIDER"
+fi
+
+# Validate provider exists
+if [[ ! -f "$PLUGIN_BASE_PATH/providers/frontend/$PROVIDER/provider.sh" ]]; then
+  echo "!     Unknown provider: $PROVIDER" >&2
+  echo "       Available providers: $(list_frontend_providers | tr '\n' ' ')" >&2
+  exit 1
+fi
+
+# Validate service name
+if [[ ! "$SERVICE" =~ ^[a-z][a-z0-9-]*$ ]]; then
+  echo "!     Service name must start with a letter and contain only lowercase letters, numbers, and hyphens" >&2
   exit 1
 fi
 
@@ -23,11 +68,11 @@ if frontend_service_exists "$SERVICE"; then
   exit 1
 fi
 
-echo "-----> Creating frontend auth service $SERVICE"
+echo "-----> Creating frontend auth service $SERVICE (provider: $PROVIDER)"
 
 # Create service directory
 mkdir -p "$SERVICE_ROOT/config" "$SERVICE_ROOT/data"
-echo "$DEFAULT_FRONTEND_PROVIDER" > "$SERVICE_ROOT/PROVIDER"
+echo "$PROVIDER" > "$SERVICE_ROOT/PROVIDER"
 
 # Ensure auth network exists
 if ! docker network ls -q -f "name=^${AUTH_NETWORK}$" | grep -q .; then
