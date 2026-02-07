@@ -239,15 +239,19 @@ http {
         ssl_certificate_key /etc/nginx/certs/server.key;
 
         # Forward auth to Authelia
+        # Using /api/authz/forward-auth (newer Authelia) or /api/verify (legacy)
         location /authelia {
             internal;
-            proxy_pass http://${AUTHELIA_INTERNAL_IP}:9091/api/verify?rd=https://${AUTH_DOMAIN}:${AUTHELIA_HTTPS_PORT}/;
+            proxy_pass http://${AUTHELIA_INTERNAL_IP}:9091/api/authz/forward-auth;
             proxy_pass_request_body off;
             proxy_set_header Content-Length "";
-            proxy_set_header Host $host;
-            proxy_set_header X-Original-URL $scheme://$host$request_uri;
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
+            proxy_set_header X-Original-Method $request_method;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $http_host;
+            proxy_set_header X-Forwarded-Uri $request_uri;
         }
 
         # API bypass (for download clients, Overseerr, etc.)

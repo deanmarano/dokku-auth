@@ -204,6 +204,17 @@ test.describe('Jellyfin LDAP Integration', () => {
     // 5. Complete initial setup wizard via API
     console.log('Completing Jellyfin initial setup...');
 
+    // Check startup state
+    try {
+      const startupState = execSync(
+        `docker exec ${JELLYFIN_CONTAINER} curl -s http://localhost:8096/Startup/FirstUser`,
+        { encoding: 'utf-8' }
+      );
+      console.log('Startup first user:', startupState);
+    } catch (e: any) {
+      console.log('Startup first user error:', e.message);
+    }
+
     // Get startup config
     try {
       const startupConfig = execSync(
@@ -211,38 +222,62 @@ test.describe('Jellyfin LDAP Integration', () => {
         { encoding: 'utf-8' }
       );
       console.log('Startup config:', startupConfig);
-    } catch {}
+    } catch (e: any) {
+      console.log('Get startup config error:', e.message);
+    }
 
     // Complete startup wizard - set initial config
     try {
-      execSync(
-        `docker exec ${JELLYFIN_CONTAINER} curl -s -X POST ` +
+      const configResult = execSync(
+        `docker exec ${JELLYFIN_CONTAINER} curl -s -w "HTTP_STATUS:%{http_code}" -X POST ` +
           `-H "Content-Type: application/json" ` +
           `-d '{"UICulture":"en-US","MetadataCountryCode":"US","PreferredMetadataLanguage":"en"}' ` +
           `"http://localhost:8096/Startup/Configuration"`,
         { encoding: 'utf-8' }
       );
-    } catch {}
+      console.log('Set startup config result:', configResult);
+    } catch (e: any) {
+      console.log('Set startup config error:', e.message);
+    }
 
     // Create initial admin user (required for Jellyfin to work)
+    // NOTE: Jellyfin 10.10+ requires the first user to be created with /Startup/User endpoint
+    // The password field is "Password" in newer versions
     try {
-      execSync(
-        `docker exec ${JELLYFIN_CONTAINER} curl -s -X POST ` +
+      const userResult = execSync(
+        `docker exec ${JELLYFIN_CONTAINER} curl -s -w "HTTP_STATUS:%{http_code}" -X POST ` +
           `-H "Content-Type: application/json" ` +
           `-d '{"Name":"admin","Password":"admin123"}' ` +
           `"http://localhost:8096/Startup/User"`,
         { encoding: 'utf-8' }
       );
-    } catch {}
+      console.log('Create startup user result:', userResult);
+    } catch (e: any) {
+      console.log('Create startup user error:', e.stderr || e.message);
+    }
 
     // Complete startup
     try {
-      execSync(
-        `docker exec ${JELLYFIN_CONTAINER} curl -s -X POST ` +
+      const completeResult = execSync(
+        `docker exec ${JELLYFIN_CONTAINER} curl -s -w "HTTP_STATUS:%{http_code}" -X POST ` +
           `"http://localhost:8096/Startup/Complete"`,
         { encoding: 'utf-8' }
       );
-    } catch {}
+      console.log('Complete startup result:', completeResult);
+    } catch (e: any) {
+      console.log('Complete startup error:', e.message);
+    }
+
+    // Check if startup is now complete
+    try {
+      const systemInfo = execSync(
+        `docker exec ${JELLYFIN_CONTAINER} curl -s http://localhost:8096/System/Info/Public`,
+        { encoding: 'utf-8' }
+      );
+      console.log('System info after wizard:', systemInfo);
+    } catch (e: any) {
+      console.log('System info error:', e.message);
+    }
 
     // Restart Jellyfin to ensure plugin is loaded
     console.log('Restarting Jellyfin to load LDAP plugin...');
