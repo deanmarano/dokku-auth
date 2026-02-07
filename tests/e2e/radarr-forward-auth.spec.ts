@@ -297,6 +297,22 @@ http {
 
     await new Promise((r) => setTimeout(r, 3000));
 
+    // Verify nginx is running and check config
+    try {
+      const nginxStatus = execSync(`docker ps --filter name=${NGINX_CONTAINER} --format "{{.Status}}"`, {
+        encoding: 'utf-8',
+      }).trim();
+      console.log(`Nginx container status: ${nginxStatus}`);
+
+      // Test nginx config
+      const nginxTest = execSync(`docker exec ${NGINX_CONTAINER} nginx -t 2>&1`, {
+        encoding: 'utf-8',
+      });
+      console.log(`Nginx config test: ${nginxTest}`);
+    } catch (e: any) {
+      console.log(`Nginx check error: ${e.message}`);
+    }
+
     // Wait for Authelia HTTPS
     console.log('Waiting for Authelia HTTPS...');
     const autheliaReady = await waitForHttps(
@@ -363,10 +379,24 @@ http {
     await page.context().clearCookies();
 
     // Try to access Radarr main UI
-    await page.goto(`https://${APP_DOMAIN}:${RADARR_HTTPS_PORT}/`);
+    console.log(`Navigating to https://${APP_DOMAIN}:${RADARR_HTTPS_PORT}/`);
+    const response = await page.goto(`https://${APP_DOMAIN}:${RADARR_HTTPS_PORT}/`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+    console.log(`Initial response status: ${response?.status()}`);
+    console.log(`Current URL after goto: ${page.url()}`);
+
+    // Take screenshot for debugging
+    await page.screenshot({ path: 'test-results/radarr-forward-auth-initial.png' }).catch(() => {});
 
     // Should be redirected to Authelia login
-    await page.waitForURL((url) => url.hostname === AUTH_DOMAIN, { timeout: 30000 });
+    if (!page.url().includes(AUTH_DOMAIN)) {
+      console.log('Not redirected yet, waiting for redirect...');
+      await page.waitForURL((url) => url.hostname === AUTH_DOMAIN, { timeout: 30000 });
+    }
+
+    console.log(`URL after redirect: ${page.url()}`);
 
     // Verify we're on Authelia login page
     const loginForm = page.locator('input[name="username"], input[id="username-textfield"]');
