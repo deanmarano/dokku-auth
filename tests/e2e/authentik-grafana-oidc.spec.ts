@@ -739,8 +739,18 @@ http {
       `https://${APP_DOMAIN}:${GRAFANA_HTTPS_PORT}/api/user`,
       { ignoreHTTPSErrors: true }
     );
+    console.log(`User API response status: ${userResponse.status()}`);
+    const userText = await userResponse.text();
+    console.log(`User API response body: ${userText}`);
+
+    if (!userResponse.ok()) {
+      // Take a screenshot for debugging
+      await page.screenshot({ path: 'test-results/grafana-user-api-failed.png' }).catch(() => {});
+      console.log('Current URL when API failed:', page.url());
+    }
+
     expect(userResponse.ok()).toBe(true);
-    const userJson = await userResponse.json();
+    const userJson = JSON.parse(userText);
     console.log('Logged in user:', userJson);
     expect(userJson.login).toBe(TEST_USER);
 

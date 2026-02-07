@@ -158,6 +158,7 @@ test.describe('Jellyfin LDAP Integration', () => {
       ldapPluginConfig
     );
     console.log('Wrote LDAP plugin configuration');
+    console.log('LDAP config:', ldapPluginConfig);
 
     // 4. Deploy Jellyfin container
     console.log('Deploying Jellyfin container...');
@@ -342,6 +343,29 @@ test.describe('Jellyfin LDAP Integration', () => {
   });
 
   test('LDAP user can authenticate via Jellyfin API', async () => {
+    // First, verify LDAP connectivity from Jellyfin container
+    console.log('Testing LDAP connectivity from Jellyfin...');
+    try {
+      const ldapTest = execSync(
+        `docker exec ${JELLYFIN_CONTAINER} sh -c "echo | timeout 5 nc -v ${LDAP_CONTAINER_NAME} 3890 2>&1 || echo 'nc not available'"`,
+        { encoding: 'utf-8', timeout: 10000 }
+      );
+      console.log('LDAP connectivity test:', ldapTest);
+    } catch (e: any) {
+      console.log('LDAP connectivity test failed:', e.message);
+    }
+
+    // Check the LDAP config inside the container
+    try {
+      const configContent = execSync(
+        `docker exec ${JELLYFIN_CONTAINER} cat /config/plugins/configurations/LDAP-Auth.xml 2>/dev/null || echo "Config not found"`,
+        { encoding: 'utf-8' }
+      );
+      console.log('LDAP config in container:', configContent);
+    } catch (e: any) {
+      console.log('Could not read config:', e.message);
+    }
+
     // Authenticate using Jellyfin's API with LDAP credentials
     const authResult = execSync(
       `docker exec ${JELLYFIN_CONTAINER} curl -s -X POST ` +
@@ -356,14 +380,14 @@ test.describe('Jellyfin LDAP Integration', () => {
 
     // Check if it's an error response
     if (authResult.startsWith('Error') || authResult.includes('"Message"')) {
-      // Get Jellyfin logs for debugging
-      const logs = execSync(`docker logs ${JELLYFIN_CONTAINER} 2>&1 | tail -30`, {
+      // Get Jellyfin logs for debugging - look for LDAP errors
+      const logs = execSync(`docker logs ${JELLYFIN_CONTAINER} 2>&1 | grep -i ldap | tail -20 || docker logs ${JELLYFIN_CONTAINER} 2>&1 | tail -30`, {
         encoding: 'utf-8',
       });
-      console.log('Jellyfin logs:', logs);
+      console.log('Jellyfin LDAP logs:', logs);
 
       // Also check LDAP connection
-      const ldapLogs = execSync(`docker logs dokku.auth.directory.${SERVICE_NAME} 2>&1 | tail -20`, {
+      const ldapLogs = execSync(`docker logs ${LDAP_CONTAINER_NAME} 2>&1 | tail -20`, {
         encoding: 'utf-8',
       });
       console.log('LLDAP logs:', ldapLogs);

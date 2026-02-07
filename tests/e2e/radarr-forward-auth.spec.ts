@@ -337,14 +337,14 @@ http {
     console.log(`Radarr container status: ${containerStatus}`);
     expect(containerStatus).toContain('Up');
 
-    // Try the ping endpoint
+    // Try the ping endpoint - Radarr v5+ returns {"status": "OK"}
     const result = execSync(
       `docker exec ${RADARR_CONTAINER} wget -q -O - http://localhost:7878/ping 2>&1 || echo "wget-failed"`,
       { encoding: 'utf-8', timeout: 10000 }
     );
     console.log(`Ping result: "${result.trim()}"`);
-    // Radarr ping returns "Pong"
-    expect(result.includes('Pong') || result.includes('wget-failed')).toBeTruthy();
+    // Radarr ping returns {"status": "OK"} or "Pong" (older versions)
+    expect(result.includes('OK') || result.includes('Pong')).toBeTruthy();
   });
 
   test('API endpoint is accessible without auth (bypass)', async ({ page }) => {
