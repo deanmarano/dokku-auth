@@ -143,7 +143,7 @@ test.describe('Jellyfin LDAP Integration', () => {
   <LdapBindPassword>${creds.ADMIN_PASSWORD}</LdapBindPassword>
   <LdapBaseDn>ou=people,${creds.BASE_DN}</LdapBaseDn>
   <LdapSearchFilter>(uid={0})</LdapSearchFilter>
-  <LdapSearchAttributes>uid,mail,cn</LdapSearchAttributes>
+  <LdapSearchAttributes></LdapSearchAttributes>
   <LdapUidAttribute>uid</LdapUidAttribute>
   <LdapUsernameAttribute>uid</LdapUsernameAttribute>
   <CreateUsersFromLdap>true</CreateUsersFromLdap>
@@ -426,6 +426,45 @@ test.describe('Jellyfin LDAP Integration', () => {
     } catch (e: any) {
       console.log('Could not read config:', e.message);
     }
+
+    // Test LDAP search directly using ldapsearch (if available) or Python
+    console.log('Testing LDAP search directly...');
+    try {
+      const creds = getLdapCredentials(SERVICE_NAME);
+      // Use Python to test LDAP search since ldapsearch might not be available
+      const pythonScript = `
+import socket
+import struct
+
+# Simple LDAP bind and search test
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.settimeout(10)
+try:
+    sock.connect(("${LDAP_CONTAINER_NAME}", 3890))
+    print("LDAP connection successful")
+
+    # Just verify we can connect - actual LDAP protocol is complex
+    sock.close()
+except Exception as e:
+    print(f"LDAP connection failed: {e}")
+`;
+      const result = execSync(
+        `docker exec ${JELLYFIN_CONTAINER} python3 -c '${pythonScript.replace(/'/g, "'\"'\"'")}'`,
+        { encoding: 'utf-8', timeout: 15000 }
+      );
+      console.log('LDAP direct test:', result);
+    } catch (e: any) {
+      console.log('LDAP direct test error:', e.message);
+    }
+
+    // Check LLDAP logs before auth attempt
+    console.log('LLDAP logs before auth attempt:');
+    try {
+      const preAuthLogs = execSync(`docker logs ${LDAP_CONTAINER_NAME} 2>&1 | tail -10`, {
+        encoding: 'utf-8',
+      });
+      console.log(preAuthLogs);
+    } catch {}
 
     // Authenticate using Jellyfin's API with LDAP credentials
     const authResult = execSync(
