@@ -327,6 +327,43 @@ http {
       throw new Error('Authelia HTTPS not ready');
     }
 
+    // Debug: Test Authelia forward-auth endpoint directly
+    console.log('Testing Authelia forward-auth endpoint...');
+    try {
+      // Test internal endpoint from nginx container
+      const forwardAuthTest = execSync(
+        `docker exec ${NGINX_CONTAINER} wget -q -O - --header="X-Original-URL: https://test.local/" ` +
+          `http://${AUTHELIA_INTERNAL_IP}:9091/api/authz/forward-auth 2>&1 || echo "STATUS:$?"`,
+        { encoding: 'utf-8', timeout: 10000 }
+      );
+      console.log(`Forward-auth test result: ${forwardAuthTest.trim()}`);
+    } catch (e: any) {
+      console.log(`Forward-auth test error: ${e.message}`);
+    }
+
+    // Also try /api/verify (legacy endpoint)
+    try {
+      const verifyTest = execSync(
+        `docker exec ${NGINX_CONTAINER} wget -q -O - --header="X-Original-URL: https://test.local/" ` +
+          `http://${AUTHELIA_INTERNAL_IP}:9091/api/verify 2>&1 || echo "STATUS:$?"`,
+        { encoding: 'utf-8', timeout: 10000 }
+      );
+      console.log(`Verify endpoint test result: ${verifyTest.trim()}`);
+    } catch (e: any) {
+      console.log(`Verify endpoint test error: ${e.message}`);
+    }
+
+    // Check nginx error log for any clues
+    try {
+      const nginxErrors = execSync(
+        `docker exec ${NGINX_CONTAINER} cat /var/log/nginx/error.log 2>/dev/null || echo "No error log"`,
+        { encoding: 'utf-8' }
+      );
+      if (nginxErrors.trim() && nginxErrors.trim() !== 'No error log') {
+        console.log(`Nginx error log: ${nginxErrors}`);
+      }
+    } catch {}
+
     // Give services a moment to fully stabilize after all setup
     await new Promise((r) => setTimeout(r, 5000));
 
