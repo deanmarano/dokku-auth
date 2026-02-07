@@ -690,32 +690,72 @@ http {
     console.log(`Current URL after login: ${currentUrl}`);
     await page.screenshot({ path: 'test-results/authentik-after-login.png' }).catch(() => {});
 
-    // If still on Authentik (consent screen), click consent/allow
-    if (currentUrl.includes(AUTH_DOMAIN) || currentUrl.includes('authentik')) {
-      console.log('Still on Authentik - checking for consent screen...');
+    // If still on Authentik (consent screen), handle it
+    if (currentUrl.includes(AUTH_DOMAIN) || currentUrl.includes('authentik') || currentUrl.includes('consent')) {
+      console.log('Still on Authentik - handling consent screen...');
+      await page.screenshot({ path: 'test-results/authentik-consent-screen.png' }).catch(() => {});
 
-      // Authentik consent page has "Allow" button
-      const consentSelectors = [
-        'button:has-text("Allow")',
-        'button:has-text("Continue")',
-        'button:has-text("Consent")',
-        'button:has-text("Authorize")',
-        'button[type="submit"]',
+      // Log what's on the page
+      const pageContent = await page.content();
+      console.log('Consent page content preview:', pageContent.substring(0, 2000));
+
+      // Authentik explicit consent flow - look for the consent form
+      // May need to wait for form to be ready
+      await page.waitForTimeout(1000);
+
+      // Try multiple approaches to submit consent
+      const consentAttempts = [
+        async () => {
+          // Look for ak-flow-executor form with continue/submit
+          const continueBtn = page.locator('ak-stage-consent button[type="submit"], .pf-c-button.pf-m-primary');
+          if (await continueBtn.count() > 0) {
+            console.log('Found ak-stage-consent submit button');
+            await Promise.all([
+              page.waitForNavigation({ timeout: 10000 }).catch(() => {}),
+              continueBtn.first().click(),
+            ]);
+            return true;
+          }
+          return false;
+        },
+        async () => {
+          // Generic submit button
+          const submitBtn = page.locator('button[type="submit"]').first();
+          if (await submitBtn.isVisible({ timeout: 2000 })) {
+            console.log('Found generic submit button');
+            await Promise.all([
+              page.waitForNavigation({ timeout: 10000 }).catch(() => {}),
+              submitBtn.click(),
+            ]);
+            return true;
+          }
+          return false;
+        },
+        async () => {
+          // Press Enter on form
+          console.log('Trying Enter key...');
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(2000);
+          return true;
+        },
       ];
 
-      for (const selector of consentSelectors) {
+      for (const attempt of consentAttempts) {
         try {
-          const btn = page.locator(selector).first();
-          if (await btn.isVisible({ timeout: 2000 })) {
-            console.log(`Found consent button: ${selector}`);
-            await btn.click();
+          if (await attempt()) {
+            console.log('Consent attempt completed');
             await page.waitForTimeout(1000);
-            break;
+            if (!page.url().includes('consent')) {
+              console.log('Left consent page');
+              break;
+            }
           }
-        } catch {
-          // Try next selector
+        } catch (e: any) {
+          console.log('Consent attempt error:', e.message);
         }
       }
+
+      console.log('URL after consent handling:', page.url());
     }
 
     // Step 6: Wait for redirect back to Grafana

@@ -343,6 +343,32 @@ test.describe('Jellyfin LDAP Integration', () => {
   });
 
   test('LDAP user can authenticate via Jellyfin API', async () => {
+    // Verify user exists in LLDAP by querying GraphQL
+    console.log('Verifying user exists in LLDAP...');
+    try {
+      const creds = getLdapCredentials(SERVICE_NAME);
+      const tokenResult = execSync(
+        `docker exec ${LDAP_CONTAINER_NAME} curl -s -X POST ` +
+          `-H "Content-Type: application/json" ` +
+          `-d '{"username":"admin","password":"${creds.ADMIN_PASSWORD}"}' ` +
+          `"http://localhost:17170/auth/simple/login"`,
+        { encoding: 'utf-8' }
+      );
+      const { token } = JSON.parse(tokenResult);
+
+      const usersResult = execSync(
+        `docker exec ${LDAP_CONTAINER_NAME} curl -s -X POST ` +
+          `-H "Content-Type: application/json" ` +
+          `-H "Authorization: Bearer ${token}" ` +
+          `-d '{"query":"{ users { id email displayName } }"}' ` +
+          `"http://localhost:17170/api/graphql"`,
+        { encoding: 'utf-8' }
+      );
+      console.log('LLDAP users:', usersResult);
+    } catch (e: any) {
+      console.log('Could not query LLDAP users:', e.message);
+    }
+
     // First, verify LDAP connectivity from Jellyfin container
     console.log('Testing LDAP connectivity from Jellyfin...');
     try {
