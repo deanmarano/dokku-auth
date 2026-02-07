@@ -80,9 +80,13 @@ function authentikApiRequest(
   token: string,
   body?: object
 ): string {
-  // Convert to JSON and replace JavaScript null with Python None
+  // Convert to JSON and replace JavaScript values with Python equivalents
   const bodyJson = body
-    ? JSON.stringify(body).replace(/'/g, "\\'").replace(/\bnull\b/g, 'None')
+    ? JSON.stringify(body)
+        .replace(/'/g, "\\'")
+        .replace(/\bnull\b/g, 'None')
+        .replace(/\btrue\b/g, 'True')
+        .replace(/\bfalse\b/g, 'False')
     : 'None';
   const pythonScript = `
 import urllib.request

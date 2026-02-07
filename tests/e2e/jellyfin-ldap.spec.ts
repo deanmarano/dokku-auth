@@ -3,7 +3,6 @@ import { execSync } from 'child_process';
 import * as fs from 'fs';
 import {
   dokku,
-  getContainerIp,
   getLdapCredentials,
   createLdapUser,
   waitForHealthy,
@@ -23,8 +22,8 @@ import {
 
 const SERVICE_NAME = 'jellyfin-ldap-test';
 const JELLYFIN_CONTAINER = 'jellyfin-ldap-test';
+const LDAP_CONTAINER_NAME = `dokku.auth.directory.${SERVICE_NAME}`;
 
-let LDAP_CONTAINER_IP: string;
 let AUTH_NETWORK: string;
 
 // Test user credentials
@@ -54,11 +53,9 @@ test.describe('Jellyfin LDAP Integration', () => {
       throw new Error('LLDAP service not healthy');
     }
 
-    // Get container IP and credentials
-    LDAP_CONTAINER_IP = getContainerIp(`dokku.auth.directory.${SERVICE_NAME}`);
-    console.log(`LLDAP container IP: ${LDAP_CONTAINER_IP}`);
-
+    // Get credentials
     const creds = getLdapCredentials(SERVICE_NAME);
+    console.log(`LLDAP container: ${LDAP_CONTAINER_NAME}`);
 
     // Get auth network
     AUTH_NETWORK = execSync(
@@ -134,10 +131,10 @@ test.describe('Jellyfin LDAP Integration', () => {
       );
     }
 
-    // LDAP plugin configuration XML
+    // LDAP plugin configuration XML - use container name (hostname on docker network)
     const ldapPluginConfig = `<?xml version="1.0" encoding="utf-8"?>
 <PluginConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <LdapServer>${LDAP_CONTAINER_IP}</LdapServer>
+  <LdapServer>${LDAP_CONTAINER_NAME}</LdapServer>
   <LdapPort>3890</LdapPort>
   <UseSsl>false</UseSsl>
   <UseStartTls>false</UseStartTls>
