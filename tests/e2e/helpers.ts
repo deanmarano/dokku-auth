@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import * as path from 'path';
 
 export const USE_SUDO = process.env.DOKKU_USE_SUDO === 'true';
 
@@ -196,4 +197,69 @@ export async function waitForHttps(
     await new Promise((r) => setTimeout(r, 2000));
   }
   return false;
+}
+
+/**
+ * Get the path to a preset file in the integrations directory.
+ */
+export function getPresetPath(presetName: string): string {
+  return path.resolve(__dirname, '../../integrations', `${presetName}.sh`);
+}
+
+/**
+ * Call a preset bash function and return its output.
+ *
+ * @param presetName - The preset name (e.g., 'grafana')
+ * @param functionName - The function to call (e.g., 'preset_generate_ldap_toml')
+ * @param args - Arguments to pass to the function
+ */
+export function callPresetFunction(
+  presetName: string,
+  functionName: string,
+  args: string[] = [],
+): string {
+  const presetPath = getPresetPath(presetName);
+  const escapedArgs = args.map(arg => `"${arg.replace(/"/g, '\\"')}"`).join(' ');
+  const cmd = `bash -c 'source "${presetPath}" && ${functionName} ${escapedArgs}'`;
+
+  try {
+    return execSync(cmd, { encoding: 'utf-8' });
+  } catch (error: any) {
+    console.error(`Failed to call preset function ${functionName}:`, error.stderr || error.message);
+    throw error;
+  }
+}
+
+/**
+ * Generate Grafana LDAP config (ldap.toml) using the preset.
+ */
+export function generateGrafanaLdapConfig(
+  ldapHost: string,
+  ldapPort: number,
+  baseDn: string,
+  bindDn: string,
+  bindPassword: string,
+): string {
+  return callPresetFunction('grafana', 'preset_generate_ldap_toml', [
+    ldapHost,
+    ldapPort.toString(),
+    baseDn,
+    bindDn,
+    bindPassword,
+  ]);
+}
+
+/**
+ * Get Grafana LDAP environment variables from the preset.
+ */
+export function getGrafanaLdapEnvVars(): Record<string, string> {
+  const output = callPresetFunction('grafana', 'preset_ldap_env_vars');
+  const envVars: Record<string, string> = {};
+  for (const line of output.split('\n')) {
+    const match = line.match(/^(\w+)=(.+)$/);
+    if (match) {
+      envVars[match[1]] = match[2];
+    }
+  }
+  return envVars;
 }

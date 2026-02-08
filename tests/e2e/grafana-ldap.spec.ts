@@ -7,6 +7,8 @@ import {
   getContainerIp,
   getLdapCredentials,
   createLdapUser,
+  generateGrafanaLdapConfig,
+  getGrafanaLdapEnvVars,
 } from './helpers';
 
 /**
@@ -69,24 +71,17 @@ test.describe('Grafana LDAP Integration', () => {
     // 2. Get credentials
     const creds = getLdapCredentials(SERVICE_NAME);
 
-    // 3. Write ldap.toml config for Grafana
-    const ldapToml = `[[servers]]
-host = "${LDAP_CONTAINER_IP}"
-port = 3890
-use_ssl = false
-start_tls = false
-bind_dn = "uid=admin,ou=people,${creds.BASE_DN}"
-bind_password = "${creds.ADMIN_PASSWORD}"
-search_filter = "(uid=%s)"
-search_base_dns = ["ou=people,${creds.BASE_DN}"]
-
-[servers.attributes]
-username = "uid"
-email = "mail"
-name = "cn"
-`;
+    // 3. Write ldap.toml config for Grafana using preset
+    const bindDn = `uid=admin,ou=people,${creds.BASE_DN}`;
+    const ldapToml = generateGrafanaLdapConfig(
+      LDAP_CONTAINER_IP,
+      3890,
+      creds.BASE_DN,
+      bindDn,
+      creds.ADMIN_PASSWORD,
+    );
     fs.writeFileSync('/tmp/grafana-ldap.toml', ldapToml);
-    console.log('Wrote /tmp/grafana-ldap.toml');
+    console.log('Wrote /tmp/grafana-ldap.toml (using grafana preset)');
 
     // 4. Deploy Grafana container
     console.log('Deploying Grafana container...');
@@ -106,13 +101,17 @@ name = "cn"
       { encoding: 'utf-8' }
     ).trim().split(' ')[0];
 
+    // Get LDAP env vars from the preset
+    const ldapEnvVars = getGrafanaLdapEnvVars();
+    const envFlags = Object.entries(ldapEnvVars)
+      .map(([key, value]) => `-e ${key}=${value}`)
+      .join(' ');
+
     execSync(
       `docker run -d --name ${GRAFANA_CONTAINER} ` +
         `--network ${authNetwork} ` +
         `-v /tmp/grafana-ldap.toml:/etc/grafana/ldap.toml:ro ` +
-        `-e GF_AUTH_LDAP_ENABLED=true ` +
-        `-e GF_AUTH_LDAP_CONFIG_FILE=/etc/grafana/ldap.toml ` +
-        `-e GF_AUTH_LDAP_ALLOW_SIGN_UP=true ` +
+        `${envFlags} ` +
         `-e GF_SERVER_HTTP_PORT=3000 ` +
         `grafana/grafana-oss:latest`,
       { encoding: 'utf-8' }

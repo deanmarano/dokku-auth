@@ -172,7 +172,7 @@ export class DokkuAuth {
       if (key) creds[key] = valueParts.join('=');
     }
 
-    return creds as Credentials;
+    return creds as unknown as Credentials;
   }
 
   /** Link an app to a directory service */
