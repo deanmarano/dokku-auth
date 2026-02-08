@@ -80,9 +80,10 @@ test.describe('GitLab LDAP Integration', () => {
     );
 
     // Create full gitlab.rb with LDAP config and required settings
+    // Note: GitLab rejects common passwords, so use a random-looking one
     const gitlabRb = `
 external_url 'http://localhost'
-gitlab_rails['initial_root_password'] = 'GitLabRoot123!'
+gitlab_rails['initial_root_password'] = 'xK9#mP2$vL7nQ4wR'
 ${ldapConfig}
 `;
     fs.writeFileSync('/tmp/gitlab-ldap.rb', gitlabRb);
