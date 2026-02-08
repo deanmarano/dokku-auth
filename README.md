@@ -7,6 +7,7 @@ LDAP directory and SSO authentication plugin for [Dokku](https://dokku.com/).
 - **Multiple Directory Providers**: LLDAP (default), GLAuth, OpenLDAP
 - **Multiple Frontend Providers**: Authelia (default) for SSO/2FA
 - **OIDC Support**: Enable OpenID Connect for apps
+- **Integration Presets**: Pre-configured settings for popular apps
 - **Simple Linking**: Apps get `LDAP_URL`, `LDAP_BASE_DN`, etc. automatically
 - **Multi-Instance**: Run multiple directory/frontend services simultaneously
 - **Network-based**: Uses Docker networks for stable connections
@@ -32,6 +33,32 @@ dokku auth:frontend:use-directory auth production
 dokku auth:frontend:apply auth
 dokku auth:frontend:protect auth myapp
 ```
+
+## Tested Integrations
+
+The following applications have been tested with dokku-auth via E2E tests:
+
+| Application | LDAP | OIDC | Forward Auth | Notes |
+|-------------|------|------|--------------|-------|
+| Gitea | ✓ | - | - | Full LDAP authentication |
+| GitLab CE | ✓ | - | - | LDAP via Rails adapter |
+| Grafana | ✓ | ✓ | - | Both LDAP and generic OAuth |
+| Nextcloud | ✓ | - | - | LDAP user backend |
+| Jellyfin | ✓ | - | - | Via LDAP Authentication plugin |
+| Immich | - | ✓ | - | OAuth2/OIDC only |
+| Radarr/Sonarr | - | - | ✓ | Authelia forward auth |
+| Authentik | ✓ | ✓ | - | Alternative frontend provider |
+
+### Integration Presets
+
+Pre-configured settings are available in `integrations/` for:
+
+- **grafana** - LDAP config and OIDC environment variables
+- **gitlab** - LDAP and OIDC Ruby configuration
+- **jellyfin** - LDAP Authentication plugin XML config
+- **immich** - OIDC environment variables
+- **radarr** - Forward auth bypass paths (also works for Sonarr, Lidarr, etc.)
+- **homeassistant** - Forward auth with trusted networks
 
 ## Commands
 
@@ -159,6 +186,18 @@ dokku auth:frontend:use-directory auth production
 dokku auth:frontend:apply auth
 ```
 
+### Authentik
+
+Full-featured identity provider with advanced features.
+
+```bash
+dokku auth:frontend:create auth
+dokku auth:frontend:provider:set auth authentik
+dokku auth:frontend:config auth DOMAIN=auth.example.com
+dokku auth:frontend:use-directory auth production
+dokku auth:frontend:apply auth
+```
+
 ## Multiple Instances
 
 Run separate services for different environments:
@@ -203,7 +242,18 @@ make test
 
 # Run specific test file
 npm test -- tests/integration/directory-lldap.test.ts
+
+# Run E2E tests (requires Dokku)
+npx playwright test --project=grafana-ldap
 ```
+
+### Test Coverage
+
+The plugin includes comprehensive tests:
+
+- **Unit tests**: Core logic validation
+- **Integration tests**: Dokku plugin commands
+- **E2E tests**: Full application integrations (18 test suites)
 
 ## Architecture
 
@@ -212,6 +262,13 @@ dokku-auth/
 ├── commands              # Main command dispatcher
 ├── config                # Plugin configuration
 ├── install               # Post-install hook
+├── integrations/         # App integration presets
+│   ├── grafana.sh
+│   ├── gitlab.sh
+│   ├── jellyfin.sh
+│   ├── immich.sh
+│   ├── radarr.sh
+│   └── homeassistant.sh
 ├── providers/
 │   ├── loader.sh        # Provider loading logic
 │   ├── directory/       # Directory providers
@@ -219,9 +276,13 @@ dokku-auth/
 │   │   ├── glauth/
 │   │   └── openldap/
 │   └── frontend/        # Frontend providers
-│       └── authelia/
+│       ├── authelia/
+│       └── authentik/
 ├── subcommands/         # Individual commands
 └── tests/               # TypeScript tests
+    ├── unit/
+    ├── integration/
+    └── e2e/
 ```
 
 ## License
