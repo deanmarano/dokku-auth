@@ -111,6 +111,14 @@ export default defineConfig({
       timeout: 600000, // 10 minutes
     },
 
+    // GitLab LDAP integration tests
+    {
+      name: 'gitlab-ldap',
+      testMatch: ['gitlab-ldap.spec.ts'],
+      use: { ...devices['Desktop Chrome'] },
+      timeout: 900000, // 15 minutes (GitLab startup is slow)
+    },
+
     // GLAuth directory provider tests
     {
       name: 'glauth',

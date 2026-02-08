@@ -290,3 +290,39 @@ export function getGrafanaOidcEnvVars(
   }
   return envVars;
 }
+
+/**
+ * Generate GitLab LDAP ruby configuration using the preset.
+ */
+export function generateGitlabLdapConfig(
+  ldapHost: string,
+  ldapPort: number,
+  baseDn: string,
+  bindDn: string,
+  bindPassword: string,
+): string {
+  return callPresetFunction('gitlab', 'preset_generate_ldap_rb', [
+    ldapHost,
+    ldapPort.toString(),
+    baseDn,
+    bindDn,
+    bindPassword,
+  ]);
+}
+
+/**
+ * Generate GitLab OIDC ruby configuration using the preset.
+ */
+export function generateGitlabOidcConfig(
+  clientId: string,
+  clientSecret: string,
+  authDomain: string,
+  gitlabDomain: string,
+): string {
+  return callPresetFunction('gitlab', 'preset_generate_oidc_rb', [
+    clientId,
+    clientSecret,
+    authDomain,
+    gitlabDomain,
+  ]);
+}
