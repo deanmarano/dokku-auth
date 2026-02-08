@@ -166,6 +166,14 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       timeout: 300000, // 5 minutes
     },
+
+    // Jellyfin LDAP integration tests
+    {
+      name: 'jellyfin-ldap',
+      testMatch: ['jellyfin-ldap.spec.ts'],
+      use: { ...devices['Desktop Chrome'] },
+      timeout: 600000, // 10 minutes
+    },
   ],
 
   // Output directory for test artifacts

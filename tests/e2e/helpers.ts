@@ -326,3 +326,20 @@ export function generateGitlabOidcConfig(
     gitlabDomain,
   ]);
 }
+
+/**
+ * Generate Jellyfin LDAP plugin configuration XML using the preset.
+ */
+export function generateJellyfinLdapConfig(
+  ldapHost: string,
+  ldapPort: number,
+  baseDn: string,
+  bindDn: string,
+): string {
+  return callPresetFunction('jellyfin', 'preset_generate_config', [
+    ldapHost,
+    ldapPort.toString(),
+    baseDn,
+    bindDn,
+  ]);
+}
