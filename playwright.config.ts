@@ -150,6 +150,14 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       timeout: 600000, // 10 minutes
     },
+
+    // Radarr forward auth tests (Authelia protecting Radarr)
+    {
+      name: 'radarr-forward-auth',
+      testMatch: ['radarr-forward-auth.spec.ts'],
+      use: { ...devices['Desktop Chrome'] },
+      timeout: 300000, // 5 minutes
+    },
   ],
 
   // Output directory for test artifacts
