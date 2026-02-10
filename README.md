@@ -53,12 +53,45 @@ The following applications have been tested with dokku-auth via E2E tests:
 
 Pre-configured settings are available in `integrations/` for:
 
+**Tested (with E2E tests):**
 - **grafana** - LDAP config and OIDC environment variables
 - **gitlab** - LDAP and OIDC Ruby configuration
 - **jellyfin** - LDAP Authentication plugin XML config
 - **immich** - OIDC environment variables
 - **radarr** - Forward auth bypass paths (also works for Sonarr, Lidarr, etc.)
 - **homeassistant** - Forward auth with trusted networks
+
+**Untested (use at your own risk):**
+- **arr** - Generic *arr stack forward auth (Sonarr, Lidarr, Readarr, Prowlarr)
+- **audiobookshelf** - Audiobook server OIDC
+- **bazarr** - Subtitle manager forward auth
+- **bookstack** - Wiki/documentation LDAP and OIDC
+- **calibreweb** - Ebook manager LDAP
+- **emby** - Media server LDAP
+- **gitea** - Git server LDAP and OIDC
+- **guacamole** - Remote desktop gateway LDAP
+- **hedgedoc** - Collaborative markdown LDAP and OIDC
+- **jellyseerr** - Media request manager forward auth
+- **linkding** - Bookmark manager OIDC
+- **matrix** - Chat server (Synapse) OIDC
+- **miniflux** - RSS reader OIDC
+- **navidrome** - Music server forward auth
+- **nextcloud** - Cloud storage LDAP and OIDC
+- **openwebui** - AI chat interface OIDC
+- **outline** - Wiki/knowledge base OIDC
+- **overseerr** - Media request manager forward auth
+- **paperless** - Document manager OIDC
+- **plex** - Media server forward auth
+- **portainer** - Docker management LDAP and OIDC
+- **proxmox** - Virtualization LDAP
+- **syncthing** - File sync forward auth
+- **uptimekuma** - Uptime monitoring forward auth
+- **vaultwarden** - Password manager OIDC
+- **wikijs** - Wiki LDAP and OIDC
+
+> **Note:** Untested integrations were ported from an earlier version and may require
+> adjustments to work with the current plugin. Please report issues or contribute
+> E2E tests to help validate them.
 
 ## Commands
 
