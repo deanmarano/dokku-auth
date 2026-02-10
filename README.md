@@ -61,7 +61,7 @@ Pre-configured settings are available in `integrations/` for:
 - **radarr** - Forward auth bypass paths (also works for Sonarr, Lidarr, etc.)
 - **homeassistant** - Forward auth with trusted networks
 
-**Untested (use at your own risk):**
+**Untested - may require additional manual configuration:**
 - **arr** - Generic *arr stack forward auth (Sonarr, Lidarr, Readarr, Prowlarr)
 - **audiobookshelf** - Audiobook server OIDC
 - **bazarr** - Subtitle manager forward auth
