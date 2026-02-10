@@ -37,6 +37,7 @@ jobs:
       radarr: ${{ steps.filter.outputs.radarr }}
       multi-app: ${{ steps.filter.outputs.multi-app }}
       authentik-grafana: ${{ steps.filter.outputs.authentik-grafana }}
+      authentik-oauth2-proxy: ${{ steps.filter.outputs.authentik-oauth2-proxy }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -134,6 +135,9 @@ jobs:
             authentik-grafana:
               - 'tests/e2e/authentik-grafana-ldap.spec.ts'
               - 'tests/e2e/authentik-grafana-oidc.spec.ts'
+
+            authentik-oauth2-proxy:
+              - 'tests/e2e/authentik-oauth2-proxy.spec.ts'
 
   lint:
     name: Lint
@@ -1020,3 +1024,60 @@ jobs:
           echo "=== PostgreSQL logs ===" && docker logs immich-postgres-test 2>&1 | tail -50 || true
           echo "=== Redis logs ===" && docker logs immich-redis-test 2>&1 | tail -20 || true
           echo "=== nginx logs ===" && docker logs immich-nginx-tls-proxy 2>&1 | tail -50 || true
+
+  e2e-authentik-oauth2-proxy:
+    name: E2E - Authentik + oauth2-proxy
+    runs-on: ubuntu-24.04
+    needs: changes
+    if: |
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/trunk') &&
+      (needs.changes.outputs.core == 'true' || needs.changes.outputs.e2e-shared == 'true' || needs.changes.outputs.authentik == 'true' || needs.changes.outputs.oidc == 'true' || needs.changes.outputs.authentik-oauth2-proxy == 'true')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+      - name: Install Dokku
+        run: |
+          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
+          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+      - name: Install plugin
+        run: |
+          sudo mkdir -p /var/lib/dokku/plugins/available/auth
+          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
+          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
+          sudo mkdir -p /var/lib/dokku/services/auth
+          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
+          sudo dokku plugin:install-dependencies auth || true
+      - name: Setup /etc/hosts for OIDC test domains
+        run: |
+          echo "127.0.0.1 ak-oauth2-auth.test.local" | sudo tee -a /etc/hosts
+          echo "127.0.0.1 ak-oauth2-app.test.local" | sudo tee -a /etc/hosts
+      - name: Run Authentik + oauth2-proxy tests
+        run: npx playwright test --project=authentik-oauth2-proxy
+        env:
+          CI: true
+          DOKKU_HOST: local
+          DOKKU_USE_SUDO: 'true'
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-authentik-oauth2-proxy
+          path: test-results/
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== Docker containers ===" && docker ps -a
+          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
+          sudo dokku auth:frontend:list 2>/dev/null || true
+          echo "=== Authentik logs ===" && docker logs dokku.auth.frontend.ak-oauth2-fe 2>&1 | tail -100 || true
+          echo "=== oauth2-proxy logs ===" && docker logs authentik-oauth2-proxy-test 2>&1 | tail -100 || true
+          echo "=== nginx logs ===" && docker logs nginx-ak-oauth2-proxy 2>&1 | tail -50 || true

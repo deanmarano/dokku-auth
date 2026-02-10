@@ -182,6 +182,14 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       timeout: 600000, // 10 minutes
     },
+
+    // Authentik + oauth2-proxy OIDC integration tests
+    {
+      name: 'authentik-oauth2-proxy',
+      testMatch: ['authentik-oauth2-proxy.spec.ts'],
+      use: { ...devices['Desktop Chrome'] },
+      timeout: 600000, // 10 minutes
+    },
   ],
 
   // Output directory for test artifacts
