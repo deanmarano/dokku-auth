@@ -159,6 +159,45 @@ function getOAuth2ScopeMappings(containerName: string, token: string): string[] 
 }
 
 /**
+ * Get a certificate keypair from Authentik for JWT signing
+ */
+function getSigningKey(containerName: string, token: string): string | null {
+  console.log('Getting certificate keypairs for JWT signing...');
+
+  const keypairsResult = authentikApiRequest(
+    containerName,
+    'GET',
+    '/api/v3/crypto/certificatekeypairs/',
+    token
+  );
+
+  const keypairs = JSON.parse(keypairsResult);
+  if (keypairs.error || !keypairs.results) {
+    console.log('Keypairs result:', keypairsResult);
+    return null;
+  }
+
+  // Look for authentik self-signed certificate first (created by default)
+  for (const kp of keypairs.results) {
+    if (kp.name?.includes('authentik') && kp.has_key === true) {
+      console.log(`Found Authentik self-signed keypair: ${kp.pk}`);
+      return kp.pk;
+    }
+  }
+
+  // Fall back to any keypair with a private key
+  for (const kp of keypairs.results) {
+    if (kp.has_key === true) {
+      console.log(`Found keypair: ${kp.name} -> ${kp.pk}`);
+      return kp.pk;
+    }
+  }
+
+  console.log('No certificate keypairs found');
+  return null;
+}
+
+/**
  * Create OAuth2 provider in Authentik via API
  */
 function createOAuth2Provider(
@@ -205,6 +244,12 @@ function createOAuth2Provider(
     console.log('Could not find implicit flow, using default');
   }
 
+  // Get signing key for JWT tokens
+  const signingKey = getSigningKey(containerName, token);
+  if (!signingKey) {
+    console.log('Warning: No signing key found, OAuth2 tokens may not be verifiable');
+  }
+
   // Create OAuth2 provider
   console.log('Creating OAuth2 provider...');
   const providerResult = authentikApiRequest(
@@ -219,7 +264,7 @@ function createOAuth2Provider(
       client_id: clientId,
       client_secret: clientSecret,
       redirect_uris: redirectUri,
-      signing_key: null,
+      signing_key: signingKey,
       access_token_validity: 'minutes=10',
       refresh_token_validity: 'days=30',
       sub_mode: 'user_username',
