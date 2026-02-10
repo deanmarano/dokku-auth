@@ -36,8 +36,9 @@ const NGINX_CONTAINER = 'nginx-ak-oauth2-proxy';
 const AUTH_DOMAIN = 'ak-oauth2-auth.test.local';
 const APP_DOMAIN = 'ak-oauth2-app.test.local';
 
-// HTTPS ports
-const AUTHENTIK_HTTPS_PORT = 9543;
+// HTTPS ports - use 443 for Authentik so the OIDC issuer URL matches
+// (Authentik returns issuer without port, so we need default HTTPS port)
+const AUTHENTIK_HTTPS_PORT = 443;
 const APP_HTTPS_PORT = 9544;
 
 // OIDC client settings
@@ -436,15 +437,15 @@ test.describe('Authentik + oauth2-proxy OIDC Browser Flow', () => {
     } catch {}
 
     // Create nginx config
+    // Note: nginx listens on 443 for Authentik (so issuer URL doesn't need port)
     const nginxConfig = `
 events { worker_connections 1024; }
 http {
     resolver 127.0.0.11 valid=10s;
 
-    # Authentik HTTPS
+    # Authentik HTTPS on port 443 (default HTTPS)
     server {
         listen 443 ssl;
-        listen ${AUTHENTIK_HTTPS_PORT} ssl;
         server_name ${AUTH_DOMAIN};
         ssl_certificate /etc/nginx/certs/server.crt;
         ssl_certificate_key /etc/nginx/certs/server.key;
@@ -480,7 +481,7 @@ http {
     execSync(
       `docker run -d --name ${NGINX_CONTAINER} ` +
         `--network ${AUTH_NETWORK} ` +
-        `-p ${AUTHENTIK_HTTPS_PORT}:${AUTHENTIK_HTTPS_PORT} ` +
+        `-p 443:443 ` +
         `-p ${APP_HTTPS_PORT}:${APP_HTTPS_PORT} ` +
         `-v /tmp/ak-oauth2-proxy-nginx.conf:/etc/nginx/nginx.conf:ro ` +
         `-v /tmp/ak-oauth2-proxy-certs:/etc/nginx/certs:ro ` +
@@ -589,12 +590,14 @@ http {
     const cookieSecret = '01234567890123456789012345678901';
 
     // Authentik OIDC endpoints - use the standard OpenID Connect URLs
+    // Note: issuer URL must not include port when using default HTTPS (443)
+    // because Authentik returns issuer without port in discovery response
     execSync(
       `docker run -d --name ${OAUTH2_PROXY_CONTAINER} ` +
         `--network ${AUTH_NETWORK} ` +
         `-e OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180 ` +
         `-e OAUTH2_PROXY_PROVIDER=oidc ` +
-        `-e OAUTH2_PROXY_OIDC_ISSUER_URL=https://${AUTH_DOMAIN}:${AUTHENTIK_HTTPS_PORT}/application/o/${appSlug}/ ` +
+        `-e OAUTH2_PROXY_OIDC_ISSUER_URL=https://${AUTH_DOMAIN}/application/o/${appSlug}/ ` +
         `-e OAUTH2_PROXY_CLIENT_ID=${OIDC_CLIENT_ID} ` +
         `-e OAUTH2_PROXY_CLIENT_SECRET=${OIDC_CLIENT_SECRET} ` +
         `-e OAUTH2_PROXY_REDIRECT_URL=https://${APP_DOMAIN}:${APP_HTTPS_PORT}/oauth2/callback ` +
