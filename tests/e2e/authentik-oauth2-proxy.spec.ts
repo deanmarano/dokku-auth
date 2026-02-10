@@ -806,17 +806,46 @@ http {
       }
     }
 
-    // Step 6: Wait for redirect back to oauth2-proxy
+    // Step 6: Wait for callback to complete and redirect to actual content
     console.log('Step 3.7: Waiting for redirect back to app...');
+
+    // First wait for URL to match app domain (should already be on callback)
     await page.waitForURL(new RegExp(APP_DOMAIN), { timeout: 30000 });
-    await page.waitForLoadState('networkidle');
+
+    // Wait for callback processing to complete - URL should NOT contain 'callback' after processing
+    console.log('Current URL:', page.url());
+
+    // Give oauth2-proxy time to process the callback and redirect
+    await page.waitForTimeout(3000);
+
+    // Wait for network to settle
+    await page.waitForLoadState('networkidle', { timeout: 30000 });
+
+    console.log('URL after networkidle:', page.url());
 
     // Step 7: Verify we see the whoami content
     console.log('Step 3.8: Verifying whoami content...');
     await page.screenshot({ path: 'test-results/ak-oauth2-whoami-result.png' }).catch(() => {});
 
-    // whoami outputs "Hostname:" and other headers info
+    // Log actual page content for debugging
     const bodyText = await page.locator('body').textContent();
+    console.log('Page body text (first 500 chars):', bodyText?.substring(0, 500));
+
+    // If we see an error, try to get more context
+    if (bodyText?.includes('Internal Server Error') || bodyText?.includes('Error') || bodyText?.includes('error')) {
+      console.log('Error detected in page, getting oauth2-proxy logs...');
+      try {
+        const proxyLogs = execSync(`docker logs ${OAUTH2_PROXY_CONTAINER} 2>&1 | tail -50`, {
+          encoding: 'utf-8',
+          timeout: 5000
+        });
+        console.log('oauth2-proxy logs:', proxyLogs);
+      } catch (e: any) {
+        console.log('Could not get oauth2-proxy logs:', e.message);
+      }
+    }
+
+    // whoami outputs "Hostname:" and other headers info
     expect(bodyText).toContain('Hostname');
 
     console.log('All OIDC browser tests passed!');
