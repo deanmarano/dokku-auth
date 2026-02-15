@@ -411,10 +411,41 @@ provider_protect_app() {
     docker network connect "$AUTH_NETWORK" "$APP_CONTAINER" 2>/dev/null || true
   fi
 
+  # Write nginx forward auth include
+  local DOKKU_ROOT="${DOKKU_ROOT:-/home/dokku}"
+  local NGINX_CONF_DIR="$DOKKU_ROOT/$APP/nginx.conf.d"
+  mkdir -p "$NGINX_CONF_DIR"
+  cat > "$NGINX_CONF_DIR/authentik-forward-auth.conf" <<EOF
+# Authentik forward auth - managed by dokku-auth plugin
+location /outpost.goauthentik.io {
+    internal;
+    proxy_pass https://$DOMAIN/outpost.goauthentik.io/auth/nginx;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header X-Original-Method \$request_method;
+    proxy_set_header X-Original-URL \$scheme://\$http_host\$request_uri;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-Host \$http_host;
+    proxy_set_header X-Forwarded-Uri \$request_uri;
+}
+
+auth_request /outpost.goauthentik.io;
+auth_request_set \$authentik_user \$upstream_http_x_authentik_username;
+auth_request_set \$authentik_groups \$upstream_http_x_authentik_groups;
+auth_request_set \$authentik_name \$upstream_http_x_authentik_name;
+auth_request_set \$authentik_email \$upstream_http_x_authentik_email;
+
+set \$target_url \$scheme://\$http_host\$request_uri;
+error_page 401 =302 https://$DOMAIN/outpost.goauthentik.io/start?rd=\$target_url;
+EOF
+
+  # Rebuild nginx config
+  "$DOKKU_BIN" proxy:build-config "$APP" 2>/dev/null || true
+
   echo "       App protected. Configure forward auth in Authentik:"
   echo "       1. Create an Application for '$APP'"
   echo "       2. Create a Proxy Provider with forward auth mode"
-  echo "       3. Configure your reverse proxy to use Authentik"
 }
 
 # Remove protection from an app
@@ -429,6 +460,13 @@ provider_unprotect_app() {
     grep -v "^${APP}$" "$SERVICE_ROOT/PROTECTED" > "$SERVICE_ROOT/PROTECTED.tmp" || true
     mv "$SERVICE_ROOT/PROTECTED.tmp" "$SERVICE_ROOT/PROTECTED"
   fi
+
+  # Remove nginx forward auth include
+  local DOKKU_ROOT="${DOKKU_ROOT:-/home/dokku}"
+  rm -f "$DOKKU_ROOT/$APP/nginx.conf.d/authentik-forward-auth.conf"
+
+  # Rebuild nginx config
+  "$DOKKU_BIN" proxy:build-config "$APP" 2>/dev/null || true
 }
 
 # Destroy the containers and related resources

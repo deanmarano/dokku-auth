@@ -420,6 +420,38 @@ provider_protect_app() {
   if [[ -n "$APP_CONTAINER" ]]; then
     docker network connect "$AUTH_NETWORK" "$APP_CONTAINER" 2>/dev/null || true
   fi
+
+  # Write nginx forward auth include
+  local DOKKU_ROOT="${DOKKU_ROOT:-/home/dokku}"
+  local NGINX_CONF_DIR="$DOKKU_ROOT/$APP/nginx.conf.d"
+  mkdir -p "$NGINX_CONF_DIR"
+  cat > "$NGINX_CONF_DIR/authelia-forward-auth.conf" <<EOF
+# Authelia forward auth - managed by dokku-auth plugin
+location /authelia-auth {
+    internal;
+    proxy_pass https://$DOMAIN/api/authz/auth-request;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header X-Original-Method \$request_method;
+    proxy_set_header X-Original-URL \$scheme://\$http_host\$request_uri;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-Host \$http_host;
+    proxy_set_header X-Forwarded-Uri \$request_uri;
+}
+
+auth_request /authelia-auth;
+auth_request_set \$authelia_user \$upstream_http_remote_user;
+auth_request_set \$authelia_groups \$upstream_http_remote_groups;
+auth_request_set \$authelia_name \$upstream_http_remote_name;
+auth_request_set \$authelia_email \$upstream_http_remote_email;
+
+set \$target_url \$scheme://\$http_host\$request_uri;
+error_page 401 =302 https://$DOMAIN/?rd=\$target_url;
+EOF
+
+  # Rebuild nginx config
+  "$DOKKU_BIN" proxy:build-config "$APP" 2>/dev/null || true
 }
 
 # Remove protection from an app
@@ -436,6 +468,13 @@ provider_unprotect_app() {
     grep -v "^${APP}$" "$SERVICE_ROOT/PROTECTED" > "$SERVICE_ROOT/PROTECTED.tmp" || true
     mv "$SERVICE_ROOT/PROTECTED.tmp" "$SERVICE_ROOT/PROTECTED"
   fi
+
+  # Remove nginx forward auth include
+  local DOKKU_ROOT="${DOKKU_ROOT:-/home/dokku}"
+  rm -f "$DOKKU_ROOT/$APP/nginx.conf.d/authelia-forward-auth.conf"
+
+  # Rebuild nginx config
+  "$DOKKU_BIN" proxy:build-config "$APP" 2>/dev/null || true
 }
 
 # Enable OIDC
