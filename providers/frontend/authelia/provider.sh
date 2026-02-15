@@ -446,8 +446,10 @@ auth_request_set \$authelia_groups \$upstream_http_remote_groups;
 auth_request_set \$authelia_name \$upstream_http_remote_name;
 auth_request_set \$authelia_email \$upstream_http_remote_email;
 
-set \$target_url \$scheme://\$http_host\$request_uri;
-error_page 401 =302 https://$DOMAIN/?rd=\$target_url;
+error_page 401 = @authelia_login;
+location @authelia_login {
+    return 302 https://$DOMAIN/?rd=\$scheme://\$http_host\$request_uri;
+}
 EOF
 
   # Rebuild nginx config

@@ -436,8 +436,10 @@ auth_request_set \$authentik_groups \$upstream_http_x_authentik_groups;
 auth_request_set \$authentik_name \$upstream_http_x_authentik_name;
 auth_request_set \$authentik_email \$upstream_http_x_authentik_email;
 
-set \$target_url \$scheme://\$http_host\$request_uri;
-error_page 401 =302 https://$DOMAIN/outpost.goauthentik.io/start?rd=\$target_url;
+error_page 401 = @authentik_login;
+location @authentik_login {
+    return 302 https://$DOMAIN/outpost.goauthentik.io/start?rd=\$scheme://\$http_host\$request_uri;
+}
 EOF
 
   # Rebuild nginx config
