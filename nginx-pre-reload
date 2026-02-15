@@ -42,6 +42,12 @@ trigger-auth-nginx-pre-reload() {
 
   [[ -z "$LOCATION_DIRECTIVES" ]] && return 0
 
+  # Skip injection if auth_request is already configured in the nginx config
+  # (e.g., from a custom nginx.conf.sigil template)
+  if grep -q 'auth_request /authelia-auth\|auth_request /outpost' "$NGINX_CONF" 2>/dev/null; then
+    return 0
+  fi
+
   # Inject auth directives into each "location / {" or "location    / {" block
   # We add them right after the opening brace of location /
   local INDENT="    "
