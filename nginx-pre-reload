@@ -36,7 +36,9 @@ trigger-auth-nginx-pre-reload() {
 
   # Read the auth directives to inject into location /
   local LOCATION_DIRECTIVES=""
-  LOCATION_DIRECTIVES=$(grep -E '^\s*(auth_request |auth_request_set |error_page 401 )' "$AUTH_CONF_FILE" || true)
+  # Only match directives at root level (no leading whitespace) to avoid
+  # picking up "auth_request off;" from inside location blocks
+  LOCATION_DIRECTIVES=$(grep -E '^(auth_request |auth_request_set |error_page 401 )' "$AUTH_CONF_FILE" || true)
 
   [[ -z "$LOCATION_DIRECTIVES" ]] && return 0
 
