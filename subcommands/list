@@ -29,7 +29,11 @@ if [[ -d "$PLUGIN_DATA_ROOT/directory" ]]; then
 
     SERVICE=$(basename "$service_dir")
     PROVIDER=$(cat "$service_dir/PROVIDER" 2>/dev/null || echo "unknown")
-    LINK_COUNT=$(wc -l < "$service_dir/LINKS" 2>/dev/null | tr -d ' ' || echo "0")
+    if [[ -f "$service_dir/LINKS" ]]; then
+      LINK_COUNT=$(wc -l < "$service_dir/LINKS" | tr -d ' ')
+    else
+      LINK_COUNT=0
+    fi
 
     if [[ -n "$QUIET" ]]; then
       echo "$SERVICE"
