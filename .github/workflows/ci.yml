@@ -203,11 +203,13 @@ jobs:
 
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           # Allow runner user to run dokku commands
           sudo usermod -aG docker $USER
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          # Set global domain for app deployments
+          sudo dokku domains:set-global test.local
 
       - name: Install plugin
         run: |
@@ -260,8 +262,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -309,8 +311,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -358,8 +360,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -407,8 +409,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -462,8 +464,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -512,8 +514,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -568,8 +570,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -619,8 +621,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -669,8 +671,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -719,8 +721,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -771,8 +773,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -823,8 +825,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -880,8 +882,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -937,8 +939,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -988,8 +990,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth
@@ -1045,8 +1047,8 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Install Dokku
         run: |
-          wget -NP . https://dokku.com/install/v0.35.15/bootstrap.sh
-          sudo DOKKU_TAG=v0.35.15 bash bootstrap.sh
+          wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
+          sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/auth

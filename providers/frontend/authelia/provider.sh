@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
 # Authelia Frontend Provider
-# SSO portal with 2FA support
+# SSO portal with 2FA support — managed as a Dokku app
 # SC2034 disabled: Variables are used when this script is sourced
 
 # Provider metadata
@@ -12,15 +12,21 @@ PROVIDER_IMAGE_VERSION="latest"
 PROVIDER_HTTP_PORT="9091"
 PROVIDER_REQUIRED_CONFIG="DOMAIN"
 
-# Create and start the Authelia container
+# Create and deploy Authelia as a Dokku app
 # Arguments: SERVICE - name of the service
 provider_create_container() {
   local SERVICE="$1"
-  local CONTAINER_NAME
-  CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
   local SERVICE_ROOT="$PLUGIN_DATA_ROOT/frontend/$SERVICE"
   local CONFIG_DIR="$SERVICE_ROOT/config"
   local DATA_DIR="$SERVICE_ROOT/data"
+
+  # Determine app name
+  local APP_NAME
+  APP_NAME=$(get_frontend_app_name "$SERVICE")
+  if [[ -z "$APP_NAME" ]]; then
+    APP_NAME="authelia"
+    echo "$APP_NAME" > "$SERVICE_ROOT/APP_NAME"
+  fi
 
   # Read or generate configuration
   local DOMAIN JWT_SECRET SESSION_SECRET STORAGE_KEY IDENTITY_VALIDATION_SECRET
@@ -28,7 +34,6 @@ provider_create_container() {
   JWT_SECRET=$(cat "$CONFIG_DIR/JWT_SECRET" 2>/dev/null || openssl rand -hex 32)
   SESSION_SECRET=$(cat "$CONFIG_DIR/SESSION_SECRET" 2>/dev/null || openssl rand -hex 32)
   STORAGE_KEY=$(cat "$CONFIG_DIR/STORAGE_KEY" 2>/dev/null || openssl rand -hex 32)
-
   IDENTITY_VALIDATION_SECRET=$(cat "$CONFIG_DIR/IDENTITY_VALIDATION_SECRET" 2>/dev/null || openssl rand -hex 32)
 
   # Save configuration
@@ -38,7 +43,6 @@ provider_create_container() {
   echo "$SESSION_SECRET" > "$CONFIG_DIR/SESSION_SECRET"
   echo "$STORAGE_KEY" > "$CONFIG_DIR/STORAGE_KEY"
   echo "$IDENTITY_VALIDATION_SECRET" > "$CONFIG_DIR/IDENTITY_VALIDATION_SECRET"
-  # Only chmod regular files, not directories (directories need execute bit)
   for f in "$CONFIG_DIR"/*; do
     [[ -f "$f" ]] && chmod 600 "$f"
   done
@@ -57,32 +61,39 @@ provider_create_container() {
   # Generate Authelia configuration
   generate_authelia_config "$SERVICE"
 
-  # Restore Authelia provider variables (may have been overwritten by load_directory_provider inside generate_authelia_config)
+  # Restore Authelia provider variables (may have been overwritten by load_directory_provider)
   PROVIDER_IMAGE="authelia/authelia"
   PROVIDER_IMAGE_VERSION="latest"
 
-  # Pull image
-  echo "-----> Pulling $PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
-  docker pull "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION" >/dev/null
+  # Create Dokku app if it doesn't exist
+  if ! "$DOKKU_BIN" apps:exists "$APP_NAME" 2>/dev/null; then
+    echo "-----> Creating Dokku app $APP_NAME"
+    "$DOKKU_BIN" apps:create "$APP_NAME"
+  fi
 
-  # Create container (no host port binding - use network for communication)
-  echo "-----> Starting Authelia container"
-  docker run -d \
-    --name "$CONTAINER_NAME" \
-    --restart unless-stopped \
-    --network "$AUTH_NETWORK" \
-    -v "$CONFIG_DIR/configuration.yml:/config/configuration.yml:ro" \
-    -v "$DATA_DIR:/data" \
-    -e "TZ=${TZ:-UTC}" \
-    "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION" >/dev/null
+  # Mount config and data directories
+  echo "-----> Mounting storage volumes"
+  "$DOKKU_BIN" storage:mount "$APP_NAME" "$CONFIG_DIR/configuration.yml:/config/configuration.yml" 2>/dev/null || true
+  "$DOKKU_BIN" storage:mount "$APP_NAME" "$DATA_DIR:/data" 2>/dev/null || true
 
-  # Wait for container to be ready
+  # Set environment variables
+  echo "-----> Setting environment variables"
+  "$DOKKU_BIN" config:set --no-restart "$APP_NAME" \
+    TZ="${TZ:-UTC}"
+
+  # Set domain
+  echo "-----> Setting domain $DOMAIN"
+  "$DOKKU_BIN" domains:set "$APP_NAME" "$DOMAIN"
+
+  # Deploy from image
+  echo "-----> Deploying $PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
+  "$DOKKU_BIN" git:from-image "$APP_NAME" "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
+
+  # Wait for app to be running
   echo "-----> Waiting for Authelia to be ready"
   local retries=30
   while [[ $retries -gt 0 ]]; do
-    # Check if health endpoint responds
-    if docker exec "$CONTAINER_NAME" wget -q --spider http://localhost:9091/api/health 2>/dev/null || \
-       docker exec "$CONTAINER_NAME" curl -sf http://localhost:9091/api/health >/dev/null 2>&1; then
+    if provider_is_running "$SERVICE"; then
       break
     fi
     sleep 2
@@ -91,8 +102,42 @@ provider_create_container() {
 
   if [[ $retries -eq 0 ]]; then
     echo "!     Authelia failed to start" >&2
-    docker logs "$CONTAINER_NAME" 2>&1 | tail -10 >&2
+    "$DOKKU_BIN" logs "$APP_NAME" --num 10 2>&1 >&2
     return 1
+  fi
+}
+
+# Adopt an existing Dokku app as the Authelia frontend
+# Arguments: SERVICE - name of the service, APP_NAME - name of the existing Dokku app
+provider_adopt_app() {
+  local SERVICE="$1"
+  local APP_NAME="$2"
+  local SERVICE_ROOT="$PLUGIN_DATA_ROOT/frontend/$SERVICE"
+  local CONFIG_DIR="$SERVICE_ROOT/config"
+
+  # Validate the Dokku app exists
+  if ! "$DOKKU_BIN" apps:exists "$APP_NAME" 2>/dev/null; then
+    echo "!     Dokku app $APP_NAME does not exist" >&2
+    return 1
+  fi
+
+  # Store app name
+  echo "$APP_NAME" > "$SERVICE_ROOT/APP_NAME"
+
+  # Read domain from the Dokku app
+  local DOMAIN
+  DOMAIN=$("$DOKKU_BIN" domains:report "$APP_NAME" --domains-app-vhosts 2>/dev/null || true)
+  if [[ -n "$DOMAIN" ]]; then
+    mkdir -p "$CONFIG_DIR"
+    echo "$DOMAIN" > "$CONFIG_DIR/DOMAIN"
+    echo "       Domain: $DOMAIN"
+  fi
+
+  # Check if it's running
+  if provider_is_running "$SERVICE"; then
+    echo "       Status: running"
+  else
+    echo "!     Warning: app $APP_NAME is not currently running" >&2
   fi
 }
 
@@ -113,10 +158,8 @@ generate_authelia_config() {
   # e.g., auth.example.com -> example.com
   local COOKIE_DOMAIN
   if [[ "$DOMAIN" == *.*.* ]]; then
-    # Has at least 2 dots, strip first subdomain
     COOKIE_DOMAIN="${DOMAIN#*.}"
   else
-    # Single subdomain like auth.local, use as-is
     COOKIE_DOMAIN="$DOMAIN"
   fi
 
@@ -332,25 +375,25 @@ provider_validate_config() {
 # Verify the service is working
 provider_verify() {
   local SERVICE="$1"
-  local CONTAINER_NAME
-  CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
+  local APP_NAME
+  APP_NAME=$(get_frontend_app_name "$SERVICE")
 
-  # Give container time to settle after startup (up to 30 seconds)
+  if [[ -z "$APP_NAME" ]]; then
+    echo "!     No app configured for service $SERVICE" >&2
+    return 1
+  fi
+
   local retries=15
   while [[ $retries -gt 0 ]]; do
-    if docker ps -q -f "name=^${CONTAINER_NAME}$" | grep -q .; then
-      # Check if HTTP endpoint is responding (Authelia has /api/health)
-      if docker exec "$CONTAINER_NAME" wget -q --spider http://localhost:9091/api/health 2>/dev/null || \
-         docker exec "$CONTAINER_NAME" curl -sf http://localhost:9091/api/health >/dev/null 2>&1; then
-        echo "       HTTP port responding"
-        return 0
-      fi
+    if provider_is_running "$SERVICE"; then
+      echo "       App $APP_NAME is running"
+      return 0
     fi
     sleep 2
     retries=$((retries - 1))
   done
 
-  echo "!     Container not running or not healthy" >&2
+  echo "!     App $APP_NAME is not running or not healthy" >&2
   return 1
 }
 
@@ -359,8 +402,8 @@ provider_info() {
   local SERVICE="$1"
   local SERVICE_ROOT="$PLUGIN_DATA_ROOT/frontend/$SERVICE"
   local CONFIG_DIR="$SERVICE_ROOT/config"
-  local CONTAINER_NAME
-  CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
+  local APP_NAME
+  APP_NAME=$(get_frontend_app_name "$SERVICE")
 
   local DOMAIN DIRECTORY OIDC_ENABLED
   DOMAIN=$(cat "$CONFIG_DIR/DOMAIN" 2>/dev/null || echo "(not set)")
@@ -369,8 +412,7 @@ provider_info() {
 
   echo "       Provider: $PROVIDER_DISPLAY_NAME"
   echo "       Image: $PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
-  echo "       Container: $CONTAINER_NAME"
-  echo "       HTTP Port: $PROVIDER_HTTP_PORT"
+  echo "       Dokku App: ${APP_NAME:-(not set)}"
   echo "       Domain: $DOMAIN"
   echo "       Directory: $DIRECTORY"
   echo "       OIDC Enabled: $OIDC_ENABLED"
@@ -399,27 +441,17 @@ provider_protect_app() {
   local APP="$2"
   local SERVICE_ROOT="$PLUGIN_DATA_ROOT/frontend/$SERVICE"
   local CONFIG_DIR="$SERVICE_ROOT/config"
-  local CONTAINER_NAME
-  CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
 
   local DOMAIN
   DOMAIN=$(cat "$CONFIG_DIR/DOMAIN")
 
-  # Set nginx configuration for forward auth
+  # Set AUTHELIA_DOMAIN env var on the protected app
   "$DOKKU_BIN" config:set --no-restart "$APP" \
-    AUTHELIA_URL="http://$CONTAINER_NAME:9091" \
     AUTHELIA_DOMAIN="$DOMAIN"
 
   # Add to protected apps list
   echo "$APP" >> "$SERVICE_ROOT/PROTECTED"
   sort -u "$SERVICE_ROOT/PROTECTED" -o "$SERVICE_ROOT/PROTECTED"
-
-  # Connect app to auth network
-  local APP_CONTAINER
-  APP_CONTAINER=$("$DOKKU_BIN" ps:report "$APP" --ps-running-container 2>/dev/null || echo "")
-  if [[ -n "$APP_CONTAINER" ]]; then
-    docker network connect "$AUTH_NETWORK" "$APP_CONTAINER" 2>/dev/null || true
-  fi
 
   # Write nginx forward auth config
   # The nginx-pre-reload trigger injects auth_request/error_page into location /
@@ -469,7 +501,7 @@ provider_unprotect_app() {
   local SERVICE_ROOT="$PLUGIN_DATA_ROOT/frontend/$SERVICE"
 
   # Remove Authelia config
-  "$DOKKU_BIN" config:unset --no-restart "$APP" AUTHELIA_URL AUTHELIA_DOMAIN 2>/dev/null || true
+  "$DOKKU_BIN" config:unset --no-restart "$APP" AUTHELIA_DOMAIN 2>/dev/null || true
 
   # Remove from protected apps list
   if [[ -f "$SERVICE_ROOT/PROTECTED" ]]; then
@@ -558,31 +590,44 @@ provider_list_oidc_clients() {
   fi
 }
 
-# Destroy the container
+# Destroy the Dokku app
 provider_destroy() {
   local SERVICE="$1"
-  local CONTAINER_NAME
-  CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
+  local APP_NAME
+  APP_NAME=$(get_frontend_app_name "$SERVICE")
 
-  docker stop "$CONTAINER_NAME" 2>/dev/null || true
-  docker rm "$CONTAINER_NAME" 2>/dev/null || true
+  if [[ -n "$APP_NAME" ]] && "$DOKKU_BIN" apps:exists "$APP_NAME" 2>/dev/null; then
+    echo "       Destroying Dokku app $APP_NAME"
+    "$DOKKU_BIN" apps:destroy "$APP_NAME" --force
+  fi
 }
 
-# Get container logs
+# Get app logs
 provider_logs() {
   local SERVICE="$1"
   shift
-  local CONTAINER_NAME
-  CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
+  local APP_NAME
+  APP_NAME=$(get_frontend_app_name "$SERVICE")
 
-  docker logs "$@" "$CONTAINER_NAME"
+  if [[ -z "$APP_NAME" ]]; then
+    echo "!     No app configured for service $SERVICE" >&2
+    return 1
+  fi
+
+  "$DOKKU_BIN" logs "$APP_NAME" "$@"
 }
 
-# Check if container is running
+# Check if the Dokku app is running
 provider_is_running() {
   local SERVICE="$1"
-  local CONTAINER_NAME
-  CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
+  local APP_NAME
+  APP_NAME=$(get_frontend_app_name "$SERVICE")
 
-  docker ps -q -f "name=^${CONTAINER_NAME}$" | grep -q .
+  if [[ -z "$APP_NAME" ]]; then
+    return 1
+  fi
+
+  local RUNNING
+  RUNNING=$("$DOKKU_BIN" ps:report "$APP_NAME" --running 2>/dev/null || echo "false")
+  [[ "$RUNNING" == "true" ]]
 }

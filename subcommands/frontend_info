@@ -30,17 +30,33 @@ echo "=====> $SERVICE frontend service information"
 # Provider info
 provider_info "$SERVICE"
 
-# Container status
-CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
+# Status
+APP_NAME=$(get_frontend_app_name "$SERVICE")
 echo ""
 echo "-----> Status"
-if docker ps -q -f "name=^${CONTAINER_NAME}$" | grep -q .; then
-  echo "       Container: running"
-  echo "       Uptime: $(docker inspect -f '{{.State.StartedAt}}' "$CONTAINER_NAME" 2>/dev/null || echo 'unknown')"
-elif docker ps -aq -f "name=^${CONTAINER_NAME}$" | grep -q .; then
-  echo "       Container: stopped"
+if [[ -n "$APP_NAME" ]]; then
+  # Dokku app mode
+  if ! "$DOKKU_BIN" apps:exists "$APP_NAME" 2>/dev/null; then
+    echo "       App: $APP_NAME (not found)"
+  else
+    RUNNING=$("$DOKKU_BIN" ps:report "$APP_NAME" --running 2>/dev/null || echo "false")
+    if [[ "$RUNNING" == "true" ]]; then
+      echo "       App: running"
+    else
+      echo "       App: stopped"
+    fi
+  fi
 else
-  echo "       Container: not created"
+  # Legacy Docker container mode
+  CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
+  if docker ps -q -f "name=^${CONTAINER_NAME}$" | grep -q .; then
+    echo "       Container: running"
+    echo "       Uptime: $(docker inspect -f '{{.State.StartedAt}}' "$CONTAINER_NAME" 2>/dev/null || echo 'unknown')"
+  elif docker ps -aq -f "name=^${CONTAINER_NAME}$" | grep -q .; then
+    echo "       Container: stopped"
+  else
+    echo "       Container: not created"
+  fi
 fi
 
 # Protected apps

@@ -9,19 +9,30 @@ source "$PLUGIN_BASE_PATH/providers/loader.sh"
 [[ "${1:-}" == auth:* ]] && shift
 
 
-SERVICE="$1"
+SERVICE=""
 FORCE=""
+KEEP_APP=""
 
 for arg in "$@"; do
   case "$arg" in
     -f|--force)
       FORCE="true"
       ;;
+    --keep-app)
+      KEEP_APP="true"
+      ;;
+    *)
+      [[ -z "$SERVICE" ]] && SERVICE="$arg"
+      ;;
   esac
 done
 
 if [[ -z "$SERVICE" ]]; then
-  echo "Usage: dokku auth:frontend:destroy <service> [-f|--force]" >&2
+  echo "Usage: dokku auth:frontend:destroy <service> [-f|--force] [--keep-app]" >&2
+  echo "" >&2
+  echo "Options:" >&2
+  echo "  -f, --force  Skip confirmation prompt" >&2
+  echo "  --keep-app   Unregister without destroying the Dokku app" >&2
   exit 1
 fi
 
@@ -66,18 +77,23 @@ if [[ -s "$SERVICE_ROOT/PROTECTED" ]]; then
   done < "$SERVICE_ROOT/PROTECTED"
 fi
 
-# Stop and remove container
+# Destroy the backing app/container (unless --keep-app)
 load_frontend_provider "$SERVICE"
-provider_destroy "$SERVICE"
+if [[ -n "$KEEP_APP" ]]; then
+  APP_NAME=$(get_frontend_app_name "$SERVICE")
+  if [[ -n "$APP_NAME" ]]; then
+    echo "       Keeping Dokku app $APP_NAME"
+  fi
+else
+  provider_destroy "$SERVICE"
+fi
 
 # Remove service directory (may need elevated permissions for container-created files)
 if [[ -d "$SERVICE_ROOT" ]]; then
-  # Try normal rm first, fallback to sudo if needed (but only if not already root)
   if ! rm -rf "$SERVICE_ROOT" 2>/dev/null; then
     if [[ "$(id -u)" != "0" ]]; then
       sudo rm -rf "$SERVICE_ROOT"
     else
-      # Already root, try with more force
       rm -rf "$SERVICE_ROOT" || true
     fi
   fi

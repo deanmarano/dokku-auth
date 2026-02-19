@@ -88,3 +88,14 @@ get_frontend_container_name() {
   local SERVICE="$1"
   echo "dokku.auth.frontend.$SERVICE"
 }
+
+# Get the Dokku app name for a frontend service
+get_frontend_app_name() {
+  local SERVICE="$1"
+  local SERVICE_ROOT="$PLUGIN_DATA_ROOT/frontend/$SERVICE"
+  if [[ -f "$SERVICE_ROOT/APP_NAME" ]]; then
+    cat "$SERVICE_ROOT/APP_NAME"
+  else
+    echo ""
+  fi
+}

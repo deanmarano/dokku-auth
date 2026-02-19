@@ -23,15 +23,31 @@ for service_dir in "$FRONTEND_DIR"/*/; do
 
   SERVICE=$(basename "$service_dir")
   PROVIDER=$(cat "$service_dir/PROVIDER" 2>/dev/null || echo "unknown")
-  CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
 
-  # Check container status
-  if docker ps -q -f "name=^${CONTAINER_NAME}$" | grep -q .; then
-    STATUS="running"
-  elif docker ps -aq -f "name=^${CONTAINER_NAME}$" | grep -q .; then
-    STATUS="stopped"
+  # Check status via Dokku app or Docker container
+  APP_NAME=$(get_frontend_app_name "$SERVICE")
+  if [[ -n "$APP_NAME" ]]; then
+    # Dokku app mode
+    if "$DOKKU_BIN" apps:exists "$APP_NAME" 2>/dev/null; then
+      RUNNING=$("$DOKKU_BIN" ps:report "$APP_NAME" --running 2>/dev/null || echo "false")
+      if [[ "$RUNNING" == "true" ]]; then
+        STATUS="running"
+      else
+        STATUS="stopped"
+      fi
+    else
+      STATUS="app missing"
+    fi
   else
-    STATUS="not created"
+    # Legacy Docker container mode
+    CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
+    if docker ps -q -f "name=^${CONTAINER_NAME}$" | grep -q .; then
+      STATUS="running"
+    elif docker ps -aq -f "name=^${CONTAINER_NAME}$" | grep -q .; then
+      STATUS="stopped"
+    else
+      STATUS="not created"
+    fi
   fi
 
   # Count protected apps

@@ -26,20 +26,20 @@ if ! frontend_service_exists "$SERVICE"; then
   exit 1
 fi
 
-# Convert common options to docker logs format
-DOCKER_ARGS=()
+# Convert common options to dokku logs format
+LOGS_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -n|--tail)
-      DOCKER_ARGS+=(--tail "$2")
+      LOGS_ARGS+=(--num "$2")
       shift 2
       ;;
     -t|--follow|-f)
-      DOCKER_ARGS+=(--follow)
+      LOGS_ARGS+=(--tail)
       shift
       ;;
     *)
-      DOCKER_ARGS+=("$1")
+      LOGS_ARGS+=("$1")
       shift
       ;;
   esac
@@ -47,4 +47,4 @@ done
 
 load_frontend_provider "$SERVICE"
 
-provider_logs "$SERVICE" "${DOCKER_ARGS[@]}"
+provider_logs "$SERVICE" "${LOGS_ARGS[@]}"

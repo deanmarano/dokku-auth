@@ -11,6 +11,7 @@ source "$PLUGIN_BASE_PATH/providers/loader.sh"
 # Parse arguments
 SERVICE=""
 PROVIDER=""
+ADOPT_APP=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --provider)
@@ -19,6 +20,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --provider=*)
       PROVIDER="${1#*=}"
+      shift
+      ;;
+    --app)
+      ADOPT_APP="$2"
+      shift 2
+      ;;
+    --app=*)
+      ADOPT_APP="${1#*=}"
       shift
       ;;
     -*)
@@ -33,13 +42,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$SERVICE" ]]; then
-  echo "Usage: dokku auth:frontend:create <service> [--provider <provider>]" >&2
+  echo "Usage: dokku auth:frontend:create <service> [--provider <provider>] [--app <dokku-app>]" >&2
   echo "" >&2
   echo "Create a new frontend auth service" >&2
   echo "" >&2
   echo "Options:" >&2
   echo "  --provider <provider>  Frontend provider to use (default: $DEFAULT_FRONTEND_PROVIDER)" >&2
   echo "                         Available: $(list_frontend_providers | tr '\n' ' ')" >&2
+  echo "  --app <dokku-app>      Adopt an existing Dokku app instead of creating a new one" >&2
   exit 1
 fi
 
@@ -63,30 +73,37 @@ fi
 
 SERVICE_ROOT="$PLUGIN_DATA_ROOT/frontend/$SERVICE"
 
-if frontend_service_exists "$SERVICE"; then
+if frontend_service_exists "$SERVICE" && [[ -z "$ADOPT_APP" ]]; then
   echo "!     Service $SERVICE already exists" >&2
   exit 1
 fi
 
 echo "-----> Creating frontend auth service $SERVICE (provider: $PROVIDER)"
 
-# Create service directory
+# Create service directory (idempotent for adopt case)
 mkdir -p "$SERVICE_ROOT/config" "$SERVICE_ROOT/data"
 echo "$PROVIDER" > "$SERVICE_ROOT/PROVIDER"
 
-# Ensure auth network exists
-if ! docker network ls -q -f "name=^${AUTH_NETWORK}$" | grep -q .; then
-  echo "       Creating network $AUTH_NETWORK"
-  docker network create "$AUTH_NETWORK" >/dev/null
-fi
-
-# Load provider and create container
+# Load provider
 load_frontend_provider "$SERVICE"
-provider_create_container "$SERVICE"
+
+if [[ -n "$ADOPT_APP" ]]; then
+  # Adopt an existing Dokku app
+  echo "-----> Adopting existing Dokku app $ADOPT_APP"
+  provider_adopt_app "$SERVICE" "$ADOPT_APP"
+else
+  # Deploy a new Dokku app
+  provider_create_container "$SERVICE"
+fi
 
 echo "-----> Frontend service $SERVICE created"
 echo ""
-echo "       Next steps:"
-echo "       1. Configure domain: dokku auth:frontend:config $SERVICE DOMAIN=auth.example.com"
-echo "       2. Link to directory: dokku auth:frontend:use-directory $SERVICE <directory-service>"
-echo "       3. Apply config:      dokku auth:frontend:apply $SERVICE"
+if [[ -n "$ADOPT_APP" ]]; then
+  echo "       Next steps:"
+  echo "       1. Protect an app: dokku auth:frontend:protect $SERVICE <app>"
+else
+  echo "       Next steps:"
+  echo "       1. Configure domain: dokku auth:frontend:config $SERVICE DOMAIN=auth.example.com"
+  echo "       2. Link to directory: dokku auth:frontend:use-directory $SERVICE <directory-service>"
+  echo "       3. Apply config:      dokku auth:frontend:apply $SERVICE"
+fi
