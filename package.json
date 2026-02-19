@@ -11,7 +11,7 @@
     "test:e2e:ui": "playwright test --project=auth-ui",
     "test:e2e:full": "playwright test --project=full-stack",
     "test:e2e:apps": "playwright test --project=app-integration",
-    "test:e2e:gitea": "playwright test gitea-integration",
+    "test:e2e:ldap-linking": "playwright test ldap-linking",
     "test:e2e:nextcloud": "playwright test nextcloud-integration",
     "test:coverage": "vitest run --coverage",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e"

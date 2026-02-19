@@ -1,6 +1,7 @@
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import type { Page } from '@playwright/test';
 
 export const USE_SUDO = process.env.DOKKU_USE_SUDO === 'true';
 
@@ -200,6 +201,255 @@ export async function waitForHttps(
   return false;
 }
 
+// ─── dokku-library integration helpers ───────────────────────────────────────
+// These helpers support tests that use `library:checkout` to deploy apps as
+// proper dokku apps instead of raw Docker containers.
+
+export interface TestUser {
+  username: string;
+  email: string;
+  password: string;
+}
+
+export interface AuthCredentials {
+  authService: string;
+  frontendService: string;
+  ldapUrl: string;
+  adminPassword: string;
+}
+
+/**
+ * Set up auth directory + frontend services for testing.
+ * Returns credentials needed for test user creation and login.
+ */
+export function setupAuthServices(
+  authService = 'test-auth',
+  frontendService = 'test-frontend',
+): AuthCredentials {
+  dokku(`auth:create ${authService}`, { timeout: 180000, ignoreAlreadyExists: true });
+  dokku(`auth:frontend:create ${frontendService}`, { timeout: 180000, ignoreAlreadyExists: true });
+  dokku(`auth:frontend:use-directory ${frontendService} ${authService}`, {
+    timeout: 60000,
+    swallowErrors: true,
+  });
+
+  const credentials = dokku(`auth:credentials ${authService}`, { logOutput: false });
+  const ldapUrl =
+    credentials.match(/LDAP_URL=(.+)/)?.[1] ?? `ldap://${authService}:3890`;
+  const adminPassword =
+    credentials.match(/ADMIN_PASSWORD=(.+)/)?.[1] ?? 'admin';
+
+  return { authService, frontendService, ldapUrl, adminPassword };
+}
+
+/** Tear down auth services completely. */
+export function teardownAuthServices(
+  authService = 'test-auth',
+  frontendService = 'test-frontend',
+): void {
+  dokku(`auth:frontend:destroy ${frontendService} -f`, {
+    timeout: 60000,
+    swallowErrors: true,
+    quiet: true,
+  });
+  dokku(`auth:destroy ${authService} -f`, {
+    timeout: 60000,
+    swallowErrors: true,
+    quiet: true,
+  });
+}
+
+/** Create a test user in the LDAP directory via the auth plugin. */
+export function createLdapTestUser(
+  authService: string,
+  user: TestUser,
+): void {
+  dokku(
+    `auth:create-user ${authService} ${user.username} ${user.email} ${user.password}`,
+    { timeout: 30000 },
+  );
+}
+
+/** Wait for auth services to become healthy. */
+export async function waitForAuthHealthy(
+  authService = 'test-auth',
+  timeout = 120000,
+): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      const result = dokku(`auth:info ${authService}`, { logOutput: false, quiet: true });
+      if (result.includes('running') || result.includes('healthy')) {
+        return true;
+      }
+    } catch {}
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+  return false;
+}
+
+/** Poll an HTTP endpoint until it responds (any success/redirect/401 status). */
+export async function waitForHttp(
+  url: string,
+  timeout = 60000,
+): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(5000),
+        redirect: 'manual',
+      });
+      if (
+        response.ok ||
+        response.status === 302 ||
+        response.status === 301 ||
+        response.status === 401
+      ) {
+        return true;
+      }
+    } catch {}
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+  return false;
+}
+
+/** Get the app URL from dokku domains. */
+export function getAppUrl(appName: string): string {
+  const domains = dokku(`domains:report ${appName} --domains-app-vhosts`, {
+    logOutput: false,
+    quiet: true,
+  });
+  const domain = domains.trim().split(/\s+/)[0];
+  return `http://${domain}`;
+}
+
+/** Check if a dokku app exists. */
+export function appExists(appName: string): boolean {
+  try {
+    dokku(`apps:exists ${appName}`, { logOutput: false, quiet: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Clean up an app deployed via library:checkout. */
+export function cleanupApp(appName: string): void {
+  try {
+    dokku(`library:cleanup ${appName} --force`, {
+      timeout: 120000,
+      swallowErrors: true,
+      quiet: true,
+    });
+  } catch {
+    try {
+      dokku(`apps:destroy ${appName} --force`, { swallowErrors: true, quiet: true });
+    } catch {}
+  }
+}
+
+/** Check if the dokku-library plugin is installed. */
+export function libraryInstalled(): boolean {
+  try {
+    const result = dokku('library:list', { logOutput: false, quiet: true });
+    return !result.includes('is not a dokku command');
+  } catch {
+    return false;
+  }
+}
+
+/** Check if a dokku plugin is available. */
+export function pluginAvailable(plugin: string): boolean {
+  try {
+    execSync(`ls /var/lib/dokku/plugins/available/${plugin}`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Add a hostname to /etc/hosts pointing to 127.0.0.1. */
+export function addHostsEntry(domain: string): void {
+  try {
+    const hosts = execSync('cat /etc/hosts', { encoding: 'utf-8' });
+    if (!hosts.includes(domain)) {
+      execSync(`echo "127.0.0.1 ${domain}" | sudo tee -a /etc/hosts`, {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+    }
+  } catch {}
+}
+
+/** Get a dokku config value for an app. */
+export function getConfig(appName: string, key: string): string {
+  return dokku(`config:get ${appName} ${key}`, { logOutput: false, quiet: true }).trim();
+}
+
+/** Wait for a dokku app to be running (via ps:report). */
+export async function waitForAppHealthy(
+  appName: string,
+  timeout = 60000,
+): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      const result = dokku(`ps:report ${appName} --running`, {
+        logOutput: false,
+        quiet: true,
+      });
+      if (result.trim() === 'true') {
+        return true;
+      }
+    } catch {}
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+  return false;
+}
+
+/** Complete the Authelia login form in a Playwright page. */
+export async function loginViaAuthelia(
+  page: Page,
+  username: string,
+  password: string,
+): Promise<void> {
+  await page.waitForSelector('input[name="username"], #username-textfield', {
+    timeout: 15000,
+  });
+
+  const usernameField = page.locator(
+    'input[name="username"], #username-textfield',
+  );
+  const passwordField = page.locator(
+    'input[name="password"], #password-textfield',
+  );
+
+  await usernameField.fill(username);
+  await passwordField.fill(password);
+
+  await page.locator('button[type="submit"], #sign-in-button').click();
+
+  await page.waitForURL((url) => !url.href.includes('authelia'), {
+    timeout: 15000,
+  });
+}
+
+/** Verify that accessing a URL redirects to Authelia login. */
+export async function verifyAutheliaRedirect(
+  page: Page,
+  appUrl: string,
+): Promise<boolean> {
+  await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
+  const url = page.url();
+  return url.includes('authelia') || url.includes('/api/verify');
+}
+
+// ─── Preset helpers (used by gitlab-ldap and other non-library tests) ────────
+
 /**
  * Get the path to a preset file in the integrations directory.
  */
@@ -210,10 +460,6 @@ export function getPresetPath(presetName: string): string {
 
 /**
  * Call a preset bash function and return its output.
- *
- * @param presetName - The preset name (e.g., 'grafana')
- * @param functionName - The function to call (e.g., 'preset_generate_ldap_toml')
- * @param args - Arguments to pass to the function
  */
 export function callPresetFunction(
   presetName: string,
@@ -230,65 +476,6 @@ export function callPresetFunction(
     console.error(`Failed to call preset function ${functionName}:`, error.stderr || error.message);
     throw error;
   }
-}
-
-/**
- * Generate Grafana LDAP config (ldap.toml) using the preset.
- */
-export function generateGrafanaLdapConfig(
-  ldapHost: string,
-  ldapPort: number,
-  baseDn: string,
-  bindDn: string,
-  bindPassword: string,
-): string {
-  return callPresetFunction('grafana', 'preset_generate_ldap_toml', [
-    ldapHost,
-    ldapPort.toString(),
-    baseDn,
-    bindDn,
-    bindPassword,
-  ]);
-}
-
-/**
- * Get Grafana LDAP environment variables from the preset.
- */
-export function getGrafanaLdapEnvVars(): Record<string, string> {
-  const output = callPresetFunction('grafana', 'preset_ldap_env_vars');
-  const envVars: Record<string, string> = {};
-  for (const line of output.split('\n')) {
-    const match = line.match(/^(\w+)=(.+)$/);
-    if (match) {
-      envVars[match[1]] = match[2];
-    }
-  }
-  return envVars;
-}
-
-/**
- * Get Grafana OIDC environment variables from the preset.
- */
-export function getGrafanaOidcEnvVars(
-  clientId: string,
-  clientSecret: string,
-  authDomain: string,
-): Record<string, string> {
-  const output = callPresetFunction('grafana', 'preset_env_vars', [
-    '', // SERVICE (unused)
-    '', // APP (unused)
-    clientId,
-    clientSecret,
-    authDomain,
-  ]);
-  const envVars: Record<string, string> = {};
-  for (const line of output.split('\n')) {
-    const match = line.match(/^(\w+)=(.+)$/);
-    if (match) {
-      envVars[match[1]] = match[2];
-    }
-  }
-  return envVars;
 }
 
 /**
@@ -324,22 +511,5 @@ export function generateGitlabOidcConfig(
     clientSecret,
     authDomain,
     gitlabDomain,
-  ]);
-}
-
-/**
- * Generate Jellyfin LDAP plugin configuration XML using the preset.
- */
-export function generateJellyfinLdapConfig(
-  ldapHost: string,
-  ldapPort: number,
-  baseDn: string,
-  bindDn: string,
-): string {
-  return callPresetFunction('jellyfin', 'preset_generate_config', [
-    ldapHost,
-    ldapPort.toString(),
-    baseDn,
-    bindDn,
   ]);
 }

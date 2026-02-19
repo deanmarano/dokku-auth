@@ -47,10 +47,10 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
 
-    // Gitea integration tests
+    // LDAP linking tests (link/unlink apps to auth services)
     {
-      name: 'gitea-integration',
-      testMatch: ['gitea-integration.spec.ts'],
+      name: 'ldap-linking',
+      testMatch: ['ldap-linking.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
       timeout: 600000, // 10 minutes
     },
@@ -89,8 +89,8 @@ export default defineConfig({
 
     // LDAP authentication tests - user creation and authentication
     {
-      name: 'gitea-ldap',
-      testMatch: ['gitea-ldap-login.spec.ts'],
+      name: 'ldap-auth',
+      testMatch: ['ldap-auth.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
       timeout: 300000, // 5 minutes
     },

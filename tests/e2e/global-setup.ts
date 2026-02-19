@@ -1,9 +1,10 @@
-import { dokku, waitForHealthy } from './helpers';
+import { dokku, waitForHealthy, libraryInstalled } from './helpers';
 
 /**
  * Global setup for E2E tests
  *
  * Creates the shared LLDAP service and test users before any tests run.
+ * Verifies required plugins (auth, library) are installed.
  */
 
 const SHARED_SERVICE = process.env.E2E_SERVICE_NAME || 'e2e-shared';
@@ -31,6 +32,15 @@ async function globalSetup() {
     }
   } catch (error) {
     console.log('Could not check/install plugin, continuing...');
+  }
+
+  // Verify dokku-library plugin is available (required for app integration tests)
+  if (!libraryInstalled()) {
+    console.warn('WARNING: dokku-library plugin is not installed.');
+    console.warn('App integration tests (grafana, radarr, etc.) will fail.');
+    console.warn('Install with: dokku plugin:install <library-plugin-url>');
+  } else {
+    console.log('dokku-library plugin: installed');
   }
 
   // Check if service already exists

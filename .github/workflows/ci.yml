@@ -99,11 +99,10 @@ jobs:
               - 'subcommands/frontend*'
               - 'tests/e2e/protect-unprotect.spec.ts'
 
-            # App-specific integrations
-            gitea:
-              - 'integrations/gitea.sh'
-              - 'tests/e2e/gitea-integration.spec.ts'
-              - 'tests/e2e/gitea-ldap-login.spec.ts'
+            # LDAP core tests
+            ldap:
+              - 'tests/e2e/ldap-linking.spec.ts'
+              - 'tests/e2e/ldap-auth.spec.ts'
 
             grafana:
               - 'integrations/grafana.sh'
@@ -271,8 +270,8 @@ jobs:
           sudo mkdir -p /var/lib/dokku/services/auth
           sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
-      - name: Run Gitea integration tests
-        run: npx playwright test --project=gitea-integration
+      - name: Run LDAP linking tests
+        run: npx playwright test --project=ldap-linking
         env:
           CI: true
           DOKKU_HOST: local

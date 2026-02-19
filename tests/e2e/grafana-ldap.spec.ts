@@ -1,225 +1,99 @@
 import { test, expect } from '@playwright/test';
-import { execSync } from 'child_process';
-import * as fs from 'fs';
 import {
-  USE_SUDO,
   dokku,
-  getContainerIp,
-  getLdapCredentials,
-  createLdapUser,
-  generateGrafanaLdapConfig,
-  getGrafanaLdapEnvVars,
+  cleanupApp,
+  waitForAppHealthy,
+  waitForHttp,
+  addHostsEntry,
+  setupAuthServices,
+  teardownAuthServices,
+  createLdapTestUser,
+  loginViaAuthelia,
+  verifyAutheliaRedirect,
+  waitForAuthHealthy,
+  getAppUrl,
+  getConfig,
+  type TestUser,
 } from './helpers';
 
 /**
  * Grafana LDAP Integration E2E Test
  *
- * Tests the integration of Grafana with LLDAP:
- * 1. Creating an LLDAP directory service
- * 2. Deploying Grafana container with LDAP config
- * 3. Verifying LDAP login works via Grafana HTTP API
- *
- * Note: This test uses docker exec curl (API-based) instead of browser tests.
- * The host cannot reach Docker internal IPs, so all HTTP calls go through
- * docker exec.
+ * Tests Grafana deployed via library:checkout with auth protection:
+ * 1. Deploy Grafana as a proper dokku app
+ * 2. Protect it with Authelia forward auth
+ * 3. Verify auth redirect and login flow
+ * 4. Verify Grafana is accessible after authentication
  */
 
-const SERVICE_NAME = 'grafana-ldap-test';
-const TEST_USER = 'grafuser';
-const TEST_PASSWORD = 'GrafPass123!';
-const TEST_EMAIL = 'grafuser@test.local';
-const GRAFANA_CONTAINER = 'grafana-ldap-test';
-
-let LDAP_CONTAINER_IP: string;
+const APP = 'test-grafana-ldap';
+const DOMAIN = `${APP}.test.local`;
+const AUTH_SERVICE = 'grafana-ldap-auth';
+const FRONTEND_SERVICE = 'grafana-ldap-fe';
+const TEST_USER: TestUser = {
+  username: 'grafuser',
+  email: 'grafuser@test.local',
+  password: 'GrafPass123!',
+};
 
 test.describe('Grafana LDAP Integration', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeAll(async () => {
     console.log('=== Setting up Grafana LDAP test ===');
 
-    // 1. Create LLDAP directory service
-    console.log('Creating LLDAP directory service...');
-    try {
-      dokku(`auth:create ${SERVICE_NAME}`);
-    } catch (e: any) {
-      if (!e.stderr?.includes('already exists')) {
-        throw e;
-      }
-    }
+    setupAuthServices(AUTH_SERVICE, FRONTEND_SERVICE);
+    await waitForAuthHealthy(AUTH_SERVICE);
+    createLdapTestUser(AUTH_SERVICE, TEST_USER);
+    addHostsEntry(DOMAIN);
 
-    // Wait for LLDAP to be healthy
-    let healthy = false;
-    for (let i = 0; i < 30; i++) {
-      try {
-        const statusCmd = USE_SUDO
-          ? `sudo dokku auth:status ${SERVICE_NAME}`
-          : `dokku auth:status ${SERVICE_NAME}`;
-        const status = execSync(statusCmd, { encoding: 'utf-8' });
-        if (status.includes('healthy')) {
-          healthy = true;
-          break;
-        }
-      } catch {}
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-    if (!healthy) {
-      throw new Error('LLDAP service not healthy');
-    }
-
-    LDAP_CONTAINER_IP = getContainerIp(`dokku.auth.directory.${SERVICE_NAME}`);
-    console.log(`LLDAP container IP: ${LDAP_CONTAINER_IP}`);
-
-    // 2. Get credentials
-    const creds = getLdapCredentials(SERVICE_NAME);
-
-    // 3. Write ldap.toml config for Grafana using preset
-    const bindDn = `uid=admin,ou=people,${creds.BASE_DN}`;
-    const ldapToml = generateGrafanaLdapConfig(
-      LDAP_CONTAINER_IP,
-      3890,
-      creds.BASE_DN,
-      bindDn,
-      creds.ADMIN_PASSWORD,
+    dokku(
+      `library:checkout grafana --name=${APP} --domain=${DOMAIN} --no-ssl --non-interactive --auth-service=${AUTH_SERVICE}`,
+      { timeout: 300000 },
     );
-    fs.writeFileSync('/tmp/grafana-ldap.toml', ldapToml);
-    console.log('Wrote /tmp/grafana-ldap.toml (using grafana preset)');
-
-    // 4. Deploy Grafana container
-    console.log('Deploying Grafana container...');
-
-    // Remove existing container if present
-    try {
-      execSync(`docker rm -f ${GRAFANA_CONTAINER}`, { encoding: 'utf-8', stdio: 'pipe' });
-    } catch (e: any) {
-      if (!e.stderr?.includes('No such container')) {
-        console.log('[cleanup]', e.stderr?.trim() || e.message);
-      }
-    }
-
-    // Get the auth network from the LLDAP container
-    const authNetwork = execSync(
-      `docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' dokku.auth.directory.${SERVICE_NAME}`,
-      { encoding: 'utf-8' }
-    ).trim().split(' ')[0];
-
-    // Get LDAP env vars from the preset
-    const ldapEnvVars = getGrafanaLdapEnvVars();
-    const envFlags = Object.entries(ldapEnvVars)
-      .map(([key, value]) => `-e ${key}=${value}`)
-      .join(' ');
-
-    execSync(
-      `docker run -d --name ${GRAFANA_CONTAINER} ` +
-        `--network ${authNetwork} ` +
-        `-v /tmp/grafana-ldap.toml:/etc/grafana/ldap.toml:ro ` +
-        `${envFlags} ` +
-        `-e GF_SERVER_HTTP_PORT=3000 ` +
-        `grafana/grafana-oss:latest`,
-      { encoding: 'utf-8' }
-    );
-
-    // Wait for Grafana to be ready via docker exec curl
-    console.log('Waiting for Grafana to be ready...');
-    let grafanaReady = false;
-    for (let i = 0; i < 60; i++) {
-      try {
-        const result = execSync(
-          `docker exec ${GRAFANA_CONTAINER} curl -sf http://localhost:3000/api/health`,
-          { encoding: 'utf-8', timeout: 5000 }
-        );
-        const health = JSON.parse(result);
-        if (health.database === 'ok') {
-          grafanaReady = true;
-          break;
-        }
-      } catch {}
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-    if (!grafanaReady) {
-      const logs = execSync(`docker logs ${GRAFANA_CONTAINER} 2>&1`, { encoding: 'utf-8' });
-      console.log('Grafana logs:', logs);
-      throw new Error('Grafana not ready');
-    }
-    console.log('Grafana is ready');
-
-    // 5. Create test user in LLDAP
-    const lldapContainer = `dokku.auth.directory.${SERVICE_NAME}`;
-    createLdapUser(
-      lldapContainer,
-      creds.ADMIN_PASSWORD,
-      TEST_USER,
-      TEST_EMAIL,
-      TEST_PASSWORD
-    );
-
-    // Small delay to ensure LDAP sync
-    await new Promise((r) => setTimeout(r, 2000));
 
     console.log('=== Setup complete ===');
-  }, 600000); // 10 minute timeout
+  }, 600000);
 
-  test.afterAll(async () => {
-    console.log('=== Cleaning up Grafana LDAP test ===');
-    try {
-      execSync(`docker rm -f ${GRAFANA_CONTAINER}`, { encoding: 'utf-8', stdio: 'pipe' });
-    } catch (e: any) {
-      if (!e.stderr?.includes('No such container')) {
-        console.log('[cleanup]', e.stderr?.trim() || e.message);
-      }
-    }
-    try {
-      dokku(`auth:destroy ${SERVICE_NAME} -f`, { quiet: true });
-    } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
-    }
+  test.afterAll(() => {
+    cleanupApp(APP);
+    teardownAuthServices(AUTH_SERVICE, FRONTEND_SERVICE);
   });
 
-  test('Grafana health check returns ok', async () => {
-    const result = execSync(
-      `docker exec ${GRAFANA_CONTAINER} curl -sf http://localhost:3000/api/health`,
-      { encoding: 'utf-8' }
-    );
-    const health = JSON.parse(result);
+  test('app is running and healthy', async () => {
+    const healthy = await waitForAppHealthy(APP, 120000);
+    expect(healthy).toBe(true);
+    const httpReady = await waitForHttp(`http://${DOMAIN}/`, 60000);
+    expect(httpReady).toBe(true);
+  });
+
+  test('unauthenticated access redirects to Authelia', async ({ page }) => {
+    const redirected = await verifyAutheliaRedirect(page, `http://${DOMAIN}/`);
+    expect(redirected).toBe(true);
+  });
+
+  test('login via Authelia grants access to Grafana', async ({ page }) => {
+    await page.goto(`http://${DOMAIN}/`);
+    await loginViaAuthelia(page, TEST_USER.username, TEST_USER.password);
+    await expect(page).toHaveURL(new RegExp(DOMAIN));
+  });
+
+  test('Grafana health API responds ok', async ({ page }) => {
+    // Authenticate first, then check the API
+    await page.goto(`http://${DOMAIN}/`);
+    await loginViaAuthelia(page, TEST_USER.username, TEST_USER.password);
+
+    const healthResponse = await page.request.get(`http://${DOMAIN}/api/health`);
+    expect(healthResponse.ok()).toBe(true);
+    const health = await healthResponse.json();
     expect(health.database).toBe('ok');
   });
 
-  test('LDAP login via API returns user info', async () => {
-    const result = execSync(
-      `docker exec ${GRAFANA_CONTAINER} curl -sf -u ${TEST_USER}:${TEST_PASSWORD} http://localhost:3000/api/user`,
-      { encoding: 'utf-8' }
-    );
-    console.log('Grafana user API response:', result);
-    const user = JSON.parse(result);
-    expect(user.login).toBe(TEST_USER);
-  });
-
-  test('LDAP login returns email', async () => {
-    const result = execSync(
-      `docker exec ${GRAFANA_CONTAINER} curl -sf -u ${TEST_USER}:${TEST_PASSWORD} http://localhost:3000/api/user`,
-      { encoding: 'utf-8' }
-    );
-    const user = JSON.parse(result);
-    expect(user.email).toBe(TEST_EMAIL);
-  });
-
-  test('Bad password returns 401', async () => {
-    const statusCode = execSync(
-      `docker exec ${GRAFANA_CONTAINER} curl -s -o /dev/null -w "%{http_code}" ` +
-        `-u ${TEST_USER}:wrongpassword http://localhost:3000/api/user`,
-      { encoding: 'utf-8' }
-    ).trim();
-    console.log(`Bad password response status: ${statusCode}`);
-    expect(statusCode).toBe('401');
-  });
-
-  test('LDAP status check succeeds', async () => {
-    const result = execSync(
-      `docker exec ${GRAFANA_CONTAINER} curl -sf -u admin:admin http://localhost:3000/api/admin/ldap/status`,
-      { encoding: 'utf-8' }
-    );
-    console.log('LDAP status:', result);
-    const status = JSON.parse(result);
-    // Grafana returns an array of LDAP server statuses
-    expect(Array.isArray(status)).toBe(true);
-    expect(status.length).toBeGreaterThan(0);
+  test('cleanup succeeds', () => {
+    const output = dokku(`library:cleanup ${APP} --force`, {
+      timeout: 120000,
+      swallowErrors: true,
+    });
+    expect(output).toContain('cleaned up');
   });
 });
