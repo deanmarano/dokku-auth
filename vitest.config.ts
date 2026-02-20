@@ -7,5 +7,6 @@ export default defineConfig({
     hookTimeout: 120000,
     include: ['tests/**/*.test.ts'],
     exclude: ['tests/e2e/**'],  // E2E uses Playwright
+    fileParallelism: false,  // Integration tests share a Dokku instance; concurrent git:from-image causes basher race conditions
   },
 });

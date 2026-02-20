@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { getDirectoryContainerId } from '../helpers';
 
 /**
  * LLDAP User Management Fixtures
@@ -22,7 +23,7 @@ export class LLDAPClient {
 
   constructor(serviceName: string) {
     this.serviceName = serviceName;
-    this.containerName = `dokku.auth.directory.${serviceName}`;
+    this.containerName = getDirectoryContainerId(serviceName);
   }
 
   private exec(cmd: string): string {

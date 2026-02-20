@@ -52,17 +52,32 @@ describe('LLDAP Directory Provider', () => {
       const creds = dokku.getCredentials(serviceName);
 
       // Get container IP since hostname may not resolve from test runner
-      const containerName = `dokku.auth.directory.${serviceName}`;
+      // For Dokku apps, find the container by label; for legacy, use the old naming convention
+      const appName = `dokku-auth-dir-${serviceName}`;
       const { execSync } = await import('child_process');
       let containerIp: string;
       try {
-        containerIp = execSync(
-          `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerName}`,
+        // Try Dokku app label first
+        const containerId = execSync(
+          `docker ps -q -f "label=com.dokku.app-name=${appName}" -f status=running | head -1`,
           { encoding: 'utf-8' }
         ).trim();
+        if (containerId) {
+          containerIp = execSync(
+            `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerId}`,
+            { encoding: 'utf-8' }
+          ).trim();
+        } else {
+          // Fall back to legacy container name
+          const containerName = `dokku.auth.directory.${serviceName}`;
+          containerIp = execSync(
+            `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerName}`,
+            { encoding: 'utf-8' }
+          ).trim();
+        }
       } catch {
         // Fallback to hostname if docker inspect fails
-        containerIp = containerName;
+        containerIp = appName;
       }
 
       const ldapUrl = `ldap://${containerIp}:3890`;

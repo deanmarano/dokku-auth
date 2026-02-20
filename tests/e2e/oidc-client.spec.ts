@@ -4,6 +4,7 @@ import {
   USE_SUDO,
   dokku,
   getContainerIp,
+  getDirectoryContainerId,
   getLdapCredentials,
   waitForHealthy,
 } from './helpers';
@@ -49,7 +50,7 @@ test.describe('OIDC Client Integration', () => {
       throw new Error('LLDAP service not healthy');
     }
 
-    const ldapContainerIp = getContainerIp(`dokku.auth.directory.${DIRECTORY_SERVICE}`);
+    const ldapContainerIp = getContainerIp(getDirectoryContainerId(DIRECTORY_SERVICE));
     LLDAP_URL = `http://${ldapContainerIp}:17170`;
     console.log(`LLDAP URL: ${LLDAP_URL}`);
 

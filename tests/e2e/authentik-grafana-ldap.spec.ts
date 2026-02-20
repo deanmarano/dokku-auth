@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import {
   dokku,
   getContainerIp,
+  getDirectoryContainerId,
   getLdapCredentials,
   createLdapUser,
   waitForHealthy,
@@ -55,12 +56,12 @@ test.describe('Authentik + Grafana LDAP Integration', () => {
       throw new Error('LLDAP service not healthy');
     }
 
-    LDAP_CONTAINER_IP = getContainerIp(`dokku.auth.directory.${DIRECTORY_SERVICE}`);
+    LDAP_CONTAINER_IP = getContainerIp(getDirectoryContainerId(DIRECTORY_SERVICE));
     console.log(`LLDAP container IP: ${LDAP_CONTAINER_IP}`);
 
     // Determine the auth network
     AUTH_NETWORK = execSync(
-      `docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' dokku.auth.directory.${DIRECTORY_SERVICE}`,
+      `docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' ${getDirectoryContainerId(DIRECTORY_SERVICE)}`,
       { encoding: 'utf-8' }
     ).trim().split(' ')[0];
     console.log(`Auth network: ${AUTH_NETWORK}`);
@@ -157,7 +158,7 @@ name = "cn"
     console.log('Grafana is ready');
 
     // 5. Create test user in LLDAP
-    const lldapContainer = `dokku.auth.directory.${DIRECTORY_SERVICE}`;
+    const lldapContainer = getDirectoryContainerId(DIRECTORY_SERVICE);
     createLdapUser(
       lldapContainer,
       creds.ADMIN_PASSWORD,

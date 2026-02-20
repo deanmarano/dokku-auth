@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { execSync } from 'child_process';
-import { dokku, waitForHealthy, getContainerIp, getLdapCredentials } from './helpers';
+import { dokku, waitForHealthy, getContainerIp, getDirectoryContainerId, getLdapCredentials } from './helpers';
 
 /**
  * OpenLDAP Directory Provider E2E Test
@@ -70,7 +70,7 @@ test.describe('OpenLDAP Directory Provider', () => {
   });
 
   test('LDAP bind succeeds with admin credentials', async () => {
-    const containerName = `dokku.auth.directory.${SERVICE_NAME}`;
+    const containerName = getDirectoryContainerId(SERVICE_NAME);
     const creds = getLdapCredentials(SERVICE_NAME);
 
     const baseDn = creds.LDAP_BASE_DN;
@@ -89,7 +89,7 @@ test.describe('OpenLDAP Directory Provider', () => {
   });
 
   test('organizational units are created', async () => {
-    const containerName = `dokku.auth.directory.${SERVICE_NAME}`;
+    const containerName = getDirectoryContainerId(SERVICE_NAME);
     const creds = getLdapCredentials(SERVICE_NAME);
 
     const baseDn = creds.LDAP_BASE_DN;
@@ -110,7 +110,7 @@ test.describe('OpenLDAP Directory Provider', () => {
   });
 
   test('default users group is created', async () => {
-    const containerName = `dokku.auth.directory.${SERVICE_NAME}`;
+    const containerName = getDirectoryContainerId(SERVICE_NAME);
     const creds = getLdapCredentials(SERVICE_NAME);
 
     const baseDn = creds.LDAP_BASE_DN;

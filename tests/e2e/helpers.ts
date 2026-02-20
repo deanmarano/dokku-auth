@@ -65,6 +65,23 @@ export function dokku(cmd: string, opts?: {
   }
 }
 
+/**
+ * Get the running container ID for a directory service.
+ * Tries Dokku app label first, falls back to legacy container name.
+ */
+export function getDirectoryContainerId(serviceName: string): string {
+  const appName = `dokku-auth-dir-${serviceName}`;
+  try {
+    const containerId = execSync(
+      `docker ps -q -f "label=com.dokku.app-name=${appName}" -f status=running | head -1`,
+      { encoding: 'utf-8' },
+    ).trim();
+    if (containerId) return containerId;
+  } catch {}
+  // Fall back to legacy container name
+  return `dokku.auth.directory.${serviceName}`;
+}
+
 /** Get the first IP address of a Docker container. */
 export function getContainerIp(containerName: string): string {
   try {

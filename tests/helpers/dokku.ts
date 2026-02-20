@@ -15,6 +15,7 @@ export interface ServiceInfo {
   provider: string;
   status: string;
   container_name: string;
+  app_name: string;
   ldap_url: string;
   base_dn: string;
   web_url: string;

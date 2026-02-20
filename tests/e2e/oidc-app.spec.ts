@@ -5,6 +5,7 @@ import {
   USE_SUDO,
   dokku,
   getContainerIp,
+  getDirectoryContainerId,
   getLdapCredentials,
   createLdapUser,
   waitForHealthy,
@@ -93,7 +94,7 @@ test.describe('OIDC Application Browser Flow', () => {
 
     // Determine the auth network
     AUTH_NETWORK = execSync(
-      `docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' dokku.auth.directory.${DIRECTORY_SERVICE}`,
+      `docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' ${getDirectoryContainerId(DIRECTORY_SERVICE)}`,
       { encoding: 'utf-8' }
     )
       .trim()
@@ -168,7 +169,7 @@ test.describe('OIDC Application Browser Flow', () => {
     console.log(`Authelia internal IP: ${AUTHELIA_INTERNAL_IP}`);
 
     // 7. Create test user in LLDAP
-    const lldapContainer = `dokku.auth.directory.${DIRECTORY_SERVICE}`;
+    const lldapContainer = getDirectoryContainerId(DIRECTORY_SERVICE);
     createLdapUser(
       lldapContainer,
       ADMIN_PASSWORD,

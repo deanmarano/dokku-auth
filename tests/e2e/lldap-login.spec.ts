@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { execSync } from 'child_process';
-import { getContainerIp } from './helpers';
+import { getContainerIp, getDirectoryContainerId } from './helpers';
 
 /**
  * E2E tests for LLDAP web UI login
@@ -29,7 +29,7 @@ let ADMIN_PASSWORD: string;
 const ADMIN_USER = 'admin';
 
 test.beforeAll(() => {
-  const containerIp = getContainerIp(`dokku.auth.directory.${SERVICE_NAME}`);
+  const containerIp = getContainerIp(getDirectoryContainerId(SERVICE_NAME));
   LLDAP_URL = `http://${containerIp}:17170`;
   ADMIN_PASSWORD = getAdminPassword(SERVICE_NAME);
   console.log(`LLDAP URL: ${LLDAP_URL}`);

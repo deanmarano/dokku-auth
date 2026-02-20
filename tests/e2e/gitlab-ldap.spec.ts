@@ -5,6 +5,7 @@ import {
   USE_SUDO,
   dokku,
   getContainerIp,
+  getDirectoryContainerId,
   getLdapCredentials,
   createLdapUser,
   generateGitlabLdapConfig,
@@ -63,7 +64,7 @@ test.describe('GitLab LDAP Integration', () => {
       throw new Error('LLDAP service not healthy');
     }
 
-    LDAP_CONTAINER_IP = getContainerIp(`dokku.auth.directory.${SERVICE_NAME}`);
+    LDAP_CONTAINER_IP = getContainerIp(getDirectoryContainerId(SERVICE_NAME));
     console.log(`LLDAP container IP: ${LDAP_CONTAINER_IP}`);
 
     // 2. Get credentials
@@ -103,7 +104,7 @@ ${ldapConfig}
 
     // Get the auth network from the LLDAP container
     const authNetwork = execSync(
-      `docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' dokku.auth.directory.${SERVICE_NAME}`,
+      `docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' ${getDirectoryContainerId(SERVICE_NAME)}`,
       { encoding: 'utf-8' }
     ).trim().split(' ')[0];
 
@@ -153,7 +154,7 @@ ${ldapConfig}
     console.log('GitLab is ready');
 
     // 5. Create test user in LLDAP
-    const lldapContainer = `dokku.auth.directory.${SERVICE_NAME}`;
+    const lldapContainer = getDirectoryContainerId(SERVICE_NAME);
     createLdapUser(
       lldapContainer,
       creds.ADMIN_PASSWORD,

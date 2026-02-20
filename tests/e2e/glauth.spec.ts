@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { execSync } from 'child_process';
-import { dokku, waitForHealthy, getContainerIp, getLdapCredentials } from './helpers';
+import { dokku, waitForHealthy, getContainerIp, getDirectoryContainerId, getLdapCredentials } from './helpers';
 
 /**
  * GLAuth Directory Provider E2E Test
@@ -65,7 +65,7 @@ test.describe('GLAuth Directory Provider', () => {
   });
 
   test('GLAuth process is running', async () => {
-    const containerName = `dokku.auth.directory.${SERVICE_NAME}`;
+    const containerName = getDirectoryContainerId(SERVICE_NAME);
 
     // GLAuth image is minimal (scratch-based), verify by checking process
     const result = execSync(

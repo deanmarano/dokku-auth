@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import {
   dokku,
   getContainerIp,
+  getDirectoryContainerId,
   waitForHealthy,
   waitForHttps,
 } from './helpers';
@@ -430,7 +431,7 @@ test.describe('Authentik + oauth2-proxy OIDC Browser Flow', () => {
 
     // Get auth network
     AUTH_NETWORK = execSync(
-      `docker inspect dokku.auth.directory.${DIRECTORY_SERVICE} --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}'`,
+      `docker inspect ${getDirectoryContainerId(DIRECTORY_SERVICE)} --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}'`,
       { encoding: 'utf-8' }
     )
       .trim()
