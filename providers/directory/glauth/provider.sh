@@ -106,7 +106,7 @@ EOF
 
   # Deploy from image
   echo "-----> Deploying $PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
-  "$DOKKU_BIN" git:from-image "$APP_NAME" "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
+  "$DOKKU_BIN" git:from-image "$APP_NAME" "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION" || true
 
   # Wait for app to be running
   echo "-----> Waiting for GLAuth to be ready"

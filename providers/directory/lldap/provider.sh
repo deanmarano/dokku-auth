@@ -86,7 +86,10 @@ provider_create_container() {
 
   # Deploy from image
   echo "-----> Deploying $PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
-  "$DOKKU_BIN" git:from-image "$APP_NAME" "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
+  # NOTE: git:from-image may return non-zero due to other plugins' basher
+  # trigger dispatch issues (e.g., "main: command not found"). We verify
+  # the app is actually running below, so it's safe to ignore the exit code.
+  "$DOKKU_BIN" git:from-image "$APP_NAME" "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION" || true
 
   # Wait for app to be running
   echo "-----> Waiting for LLDAP to be ready"
