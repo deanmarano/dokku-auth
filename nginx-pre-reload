@@ -6,7 +6,7 @@ set -eo pipefail
 
 source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions" 2>/dev/null || true
 
-trigger-auth-nginx-pre-reload() {
+main() {
   declare desc="Inject forward auth into nginx config for protected apps"
   declare trigger="nginx-pre-reload"
   declare APP="$1"
@@ -66,4 +66,4 @@ ${INJECT_BLOCK%\\n}" "$NGINX_CONF"
   sed -i '/-error\.html {/a\    auth_request off;' "$NGINX_CONF"
 }
 
-trigger-auth-nginx-pre-reload "$@"
+main "$@"
