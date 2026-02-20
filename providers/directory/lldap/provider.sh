@@ -86,13 +86,7 @@ provider_create_container() {
 
   # Deploy from image
   echo "-----> Deploying $PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
-  local deploy_output
-  if deploy_output=$("$DOKKU_BIN" git:from-image "$APP_NAME" "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION" 2>&1); then
-    echo "$deploy_output"
-  else
-    echo "$deploy_output"
-    echo "       git:from-image exited $?, continuing to check if app started..." >&2
-  fi
+  "$DOKKU_BIN" git:from-image "$APP_NAME" "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
 
   # Wait for app to be running
   echo "-----> Waiting for LLDAP to be ready"

@@ -6,7 +6,7 @@ PLUGIN_BASE_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$PLUGIN_BASE_PATH/config"
 
 # Only handle auth commands
-[[ " auth:help auth " == *" $1 "* ]] || [[ "$1" == "auth:"* ]] || exit "$DOKKU_NOT_IMPLEMENTED_EXIT"
+[[ " auth:help auth " == *" $1 "* ]] || [[ "$1" == "auth:"* ]] || exit "${DOKKU_NOT_IMPLEMENTED_EXIT:-10}"
 
 show_help() {
   cat << EOF
@@ -97,6 +97,6 @@ case "$1" in
     fi
     ;;
   *)
-    exit "$DOKKU_NOT_IMPLEMENTED_EXIT"
+    exit "${DOKKU_NOT_IMPLEMENTED_EXIT:-10}"
     ;;
 esac
