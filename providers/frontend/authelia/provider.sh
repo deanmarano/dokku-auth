@@ -200,6 +200,9 @@ generate_authelia_config() {
     OIDC_CLIENTS_YAML=$(generate_oidc_clients_yaml "$SERVICE")
   fi
 
+  # Remove existing file to avoid permission issues on re-generation
+  rm -f "$CONFIG_DIR/configuration.yml"
+
   cat > "$CONFIG_DIR/configuration.yml" <<EOF
 ---
 theme: light
