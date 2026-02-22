@@ -61,6 +61,13 @@ provider_create_container() {
   # Generate Authelia configuration
   generate_authelia_config "$SERVICE"
 
+  # Create users.yml if using file-based auth (no LDAP linked)
+  # Authelia v4.39+ crashes fatally on first start if users.yml is missing
+  if [[ ! -f "$SERVICE_ROOT/DIRECTORY" ]] && [[ ! -f "$DATA_DIR/users.yml" ]]; then
+    echo "users: {}" > "$DATA_DIR/users.yml"
+    chmod 600 "$DATA_DIR/users.yml"
+  fi
+
   # Restore Authelia provider variables (may have been overwritten by load_directory_provider)
   PROVIDER_IMAGE="authelia/authelia"
   PROVIDER_IMAGE_VERSION="latest"
