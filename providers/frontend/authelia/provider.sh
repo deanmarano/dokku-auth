@@ -62,9 +62,16 @@ provider_create_container() {
   generate_authelia_config "$SERVICE"
 
   # Create users.yml if using file-based auth (no LDAP linked)
-  # Authelia v4.39+ crashes fatally on first start if users.yml is missing
+  # Authelia v4.39+ crashes fatally if users.yml is missing or empty
   if [[ ! -f "$SERVICE_ROOT/DIRECTORY" ]] && [[ ! -f "$DATA_DIR/users.yml" ]]; then
-    echo "users: {}" > "$DATA_DIR/users.yml"
+    cat > "$DATA_DIR/users.yml" <<'USERSEOF'
+users:
+  placeholder:
+    disabled: true
+    displayname: "Placeholder"
+    email: placeholder@localhost
+    password: "$argon2id$v=19$m=65536,t=3,p=4$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+USERSEOF
     chmod 600 "$DATA_DIR/users.yml"
   fi
 
