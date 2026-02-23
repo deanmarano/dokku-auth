@@ -321,6 +321,8 @@ jobs:
           sudo mkdir -p /var/lib/dokku/services/auth
           sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
+      - name: Install dokku-library plugin
+        run: sudo dokku plugin:install https://github.com/deanmarano/dokku-library.git library
       - name: Run Nextcloud LDAP tests
         run: npx playwright test --project=nextcloud-ldap
         env:
@@ -474,6 +476,8 @@ jobs:
           sudo mkdir -p /var/lib/dokku/services/auth
           sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
+      - name: Install dokku-library plugin
+        run: sudo dokku plugin:install https://github.com/deanmarano/dokku-library.git library
       - name: Run Grafana LDAP tests
         run: npx playwright test --project=grafana-ldap
         env:
@@ -524,6 +528,8 @@ jobs:
           sudo mkdir -p /var/lib/dokku/services/auth
           sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
+      - name: Install dokku-library plugin
+        run: sudo dokku plugin:install https://github.com/deanmarano/dokku-library.git library
       - name: Setup /etc/hosts for OIDC testing
         run: |
           echo "127.0.0.1 grafana-auth.test.local" | sudo tee -a /etc/hosts
@@ -892,6 +898,8 @@ jobs:
           sudo mkdir -p /var/lib/dokku/services/auth
           sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
+      - name: Install dokku-library plugin
+        run: sudo dokku plugin:install https://github.com/deanmarano/dokku-library.git library
       - name: Setup /etc/hosts for forward auth testing
         run: |
           echo "127.0.0.1 radarr-auth.test.local" | sudo tee -a /etc/hosts
@@ -949,6 +957,8 @@ jobs:
           sudo mkdir -p /var/lib/dokku/services/auth
           sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
+      - name: Install dokku-library plugin
+        run: sudo dokku plugin:install https://github.com/deanmarano/dokku-library.git library
       - name: Run Jellyfin LDAP tests
         run: npx playwright test --project=jellyfin-ldap
         env:
@@ -1000,6 +1010,8 @@ jobs:
           sudo mkdir -p /var/lib/dokku/services/auth
           sudo chown -R dokku:dokku /var/lib/dokku/services/auth
           sudo dokku plugin:install-dependencies auth || true
+      - name: Install dokku-library plugin
+        run: sudo dokku plugin:install https://github.com/deanmarano/dokku-library.git library
       - name: Setup /etc/hosts for OIDC test domains
         run: |
           echo "127.0.0.1 immich-auth.test.local" | sudo tee -a /etc/hosts
