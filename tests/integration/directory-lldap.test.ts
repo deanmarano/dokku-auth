@@ -63,17 +63,19 @@ describe('LLDAP Directory Provider', () => {
           { encoding: 'utf-8' }
         ).trim();
         if (containerId) {
-          containerIp = execSync(
-            `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerId}`,
+          const ips = execSync(
+            `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' ${containerId}`,
             { encoding: 'utf-8' }
           ).trim();
+          containerIp = ips.split(' ')[0];
         } else {
           // Fall back to legacy container name
           const containerName = `dokku.auth.directory.${serviceName}`;
-          containerIp = execSync(
-            `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerName}`,
+          const ips = execSync(
+            `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' ${containerName}`,
             { encoding: 'utf-8' }
           ).trim();
+          containerIp = ips.split(' ')[0];
         }
       } catch {
         // Fallback to hostname if docker inspect fails
