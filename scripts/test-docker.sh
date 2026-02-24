@@ -3,7 +3,7 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-echo "=== dokku-auth Docker Test Environment ==="
+echo "=== dokku-sso Docker Test Environment ==="
 echo ""
 
 # Parse arguments
@@ -40,9 +40,9 @@ timeout 120 bash -c 'until docker compose -f docker-compose.test.yml exec -T dok
 echo "Dokku is ready!"
 
 # Install the plugin
-echo "Installing auth plugin..."
-docker compose -f docker-compose.test.yml exec -T dokku dokku plugin:install file:///plugin-src --name auth 2>/dev/null || \
-  docker compose -f docker-compose.test.yml exec -T dokku dokku plugin:update auth file:///plugin-src 2>/dev/null || true
+echo "Installing sso plugin..."
+docker compose -f docker-compose.test.yml exec -T dokku dokku plugin:install file:///plugin-src --name sso 2>/dev/null || \
+  docker compose -f docker-compose.test.yml exec -T dokku dokku plugin:update sso file:///plugin-src 2>/dev/null || true
 
 # Show plugin is installed
 echo ""
@@ -53,7 +53,7 @@ docker compose -f docker-compose.test.yml exec -T dokku dokku plugin:list
 if [[ "$TEST_TYPE" == "all" ]] || [[ "$TEST_TYPE" == "e2e" ]] || [[ "$TEST_TYPE" == "integration" ]]; then
   echo ""
   echo "Creating test LLDAP service..."
-  docker compose -f docker-compose.test.yml exec -T dokku dokku auth:create e2e-test 2>/dev/null || true
+  docker compose -f docker-compose.test.yml exec -T dokku dokku sso:create e2e-test 2>/dev/null || true
 
   # Wait for service to be ready
   echo "Waiting for LLDAP to be ready..."
@@ -62,7 +62,7 @@ if [[ "$TEST_TYPE" == "all" ]] || [[ "$TEST_TYPE" == "e2e" ]] || [[ "$TEST_TYPE"
   # Show service status
   echo ""
   echo "Service info:"
-  docker compose -f docker-compose.test.yml exec -T dokku dokku auth:info e2e-test 2>/dev/null || true
+  docker compose -f docker-compose.test.yml exec -T dokku dokku sso:info e2e-test 2>/dev/null || true
 fi
 
 # Interactive mode - drop into shell

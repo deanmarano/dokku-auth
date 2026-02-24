@@ -37,7 +37,7 @@ test.describe('OIDC Client Integration', () => {
     // 1. Create LLDAP directory service
     console.log('Creating LLDAP directory service...');
     try {
-      dokku(`auth:create ${DIRECTORY_SERVICE}`);
+      dokku(`sso:create ${DIRECTORY_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -61,7 +61,7 @@ test.describe('OIDC Client Integration', () => {
     // 2. Create Authelia frontend service
     console.log('Creating Authelia frontend service...');
     try {
-      dokku(`auth:frontend:create ${FRONTEND_SERVICE}`);
+      dokku(`sso:frontend:create ${FRONTEND_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -71,7 +71,7 @@ test.describe('OIDC Client Integration', () => {
     // 3. Link frontend to directory
     console.log('Linking frontend to directory...');
     try {
-      dokku(`auth:frontend:use-directory ${FRONTEND_SERVICE} ${DIRECTORY_SERVICE}`);
+      dokku(`sso:frontend:use-directory ${FRONTEND_SERVICE} ${DIRECTORY_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already linked')) {
         console.log('Link result:', e.message);
@@ -80,12 +80,12 @@ test.describe('OIDC Client Integration', () => {
 
     // 4. Enable OIDC
     console.log('Enabling OIDC...');
-    dokku(`auth:oidc:enable ${FRONTEND_SERVICE}`);
+    dokku(`sso:oidc:enable ${FRONTEND_SERVICE}`);
 
     // 5. Add OIDC client
     console.log('Adding OIDC client...');
     try {
-      dokku(`auth:oidc:add-client ${FRONTEND_SERVICE} ${OIDC_CLIENT_ID} ${OIDC_CLIENT_SECRET} ${OIDC_REDIRECT_URI}`);
+      dokku(`sso:oidc:add-client ${FRONTEND_SERVICE} ${OIDC_CLIENT_ID} ${OIDC_CLIENT_SECRET} ${OIDC_REDIRECT_URI}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -95,7 +95,7 @@ test.describe('OIDC Client Integration', () => {
     // 6. Apply frontend configuration
     console.log('Applying frontend configuration...');
     try {
-      dokku(`auth:frontend:apply ${FRONTEND_SERVICE}`);
+      dokku(`sso:frontend:apply ${FRONTEND_SERVICE}`);
     } catch (e: any) {
       console.log('Apply result:', e.message);
     }
@@ -108,14 +108,14 @@ test.describe('OIDC Client Integration', () => {
     if (!autheliaHealthy) {
       // Get logs for debugging
       try {
-        const logs = dokku(`auth:frontend:logs ${FRONTEND_SERVICE} -n 50`);
+        const logs = dokku(`sso:frontend:logs ${FRONTEND_SERVICE} -n 50`);
         console.log('Authelia logs:', logs);
       } catch {}
       console.log('Warning: Authelia may not be fully healthy');
     }
 
     // Get Authelia container IP
-    const autheliaContainerIp = getContainerIp(`dokku.auth.frontend.${FRONTEND_SERVICE}`);
+    const autheliaContainerIp = getContainerIp(`dokku.sso.frontend.${FRONTEND_SERVICE}`);
     AUTHELIA_URL = `http://${autheliaContainerIp}:9091`;
     console.log(`Authelia URL: ${AUTHELIA_URL}`);
 
@@ -124,31 +124,31 @@ test.describe('OIDC Client Integration', () => {
   test.afterAll(async () => {
     console.log('=== Cleaning up OIDC test environment ===');
     try {
-      dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true });
+      dokku(`sso:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true });
     } catch (e: any) {
       console.log('[cleanup] frontend:destroy:', e.stderr?.trim() || e.message);
     }
     try {
-      dokku(`auth:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
+      dokku(`sso:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 
   test('LLDAP directory service should be running', async () => {
-    const statusCmd = USE_SUDO ? `sudo dokku auth:status ${DIRECTORY_SERVICE}` : `dokku auth:status ${DIRECTORY_SERVICE}`;
+    const statusCmd = USE_SUDO ? `sudo dokku sso:status ${DIRECTORY_SERVICE}` : `dokku sso:status ${DIRECTORY_SERVICE}`;
     const status = execSync(statusCmd, { encoding: 'utf-8' });
     expect(status).toContain('healthy');
   });
 
   test('Authelia frontend service should be running', async () => {
-    const info = dokku(`auth:frontend:info ${FRONTEND_SERVICE}`);
+    const info = dokku(`sso:frontend:info ${FRONTEND_SERVICE}`);
     expect(info).toContain(FRONTEND_SERVICE);
     expect(info.toLowerCase()).toContain('authelia');
   });
 
   test('OIDC should be enabled', async () => {
-    const clients = dokku(`auth:oidc:list ${FRONTEND_SERVICE}`);
+    const clients = dokku(`sso:oidc:list ${FRONTEND_SERVICE}`);
     expect(clients).toContain(OIDC_CLIENT_ID);
     expect(clients).toContain(OIDC_REDIRECT_URI);
   });
@@ -193,7 +193,7 @@ test.describe('OIDC Client Integration', () => {
   });
 
   test('OIDC client list should show registered client', async () => {
-    const list = dokku(`auth:oidc:list ${FRONTEND_SERVICE}`);
+    const list = dokku(`sso:oidc:list ${FRONTEND_SERVICE}`);
 
     expect(list).toContain(OIDC_CLIENT_ID);
     expect(list).toContain('Redirect URI');
@@ -203,33 +203,33 @@ test.describe('OIDC Client Integration', () => {
   test('should remove OIDC client', async () => {
     // Add a temporary client to remove
     const tempClientId = 'temp-remove-test';
-    dokku(`auth:oidc:add-client ${FRONTEND_SERVICE} ${tempClientId} secret123 https://temp.local/callback`);
+    dokku(`sso:oidc:add-client ${FRONTEND_SERVICE} ${tempClientId} secret123 https://temp.local/callback`);
 
     // Verify it was added
-    let list = dokku(`auth:oidc:list ${FRONTEND_SERVICE}`);
+    let list = dokku(`sso:oidc:list ${FRONTEND_SERVICE}`);
     expect(list).toContain(tempClientId);
 
     // Remove it
-    dokku(`auth:oidc:remove-client ${FRONTEND_SERVICE} ${tempClientId}`);
+    dokku(`sso:oidc:remove-client ${FRONTEND_SERVICE} ${tempClientId}`);
 
     // Verify it was removed
-    list = dokku(`auth:oidc:list ${FRONTEND_SERVICE}`);
+    list = dokku(`sso:oidc:list ${FRONTEND_SERVICE}`);
     expect(list).not.toContain(tempClientId);
   });
 
   test('should disable and re-enable OIDC', async () => {
     // Disable OIDC
-    dokku(`auth:oidc:disable ${FRONTEND_SERVICE}`);
+    dokku(`sso:oidc:disable ${FRONTEND_SERVICE}`);
 
     // List should show disabled
-    let list = dokku(`auth:oidc:list ${FRONTEND_SERVICE}`);
+    let list = dokku(`sso:oidc:list ${FRONTEND_SERVICE}`);
     expect(list).toContain('not enabled');
 
     // Re-enable OIDC
-    dokku(`auth:oidc:enable ${FRONTEND_SERVICE}`);
+    dokku(`sso:oidc:enable ${FRONTEND_SERVICE}`);
 
     // Client should still be there
-    list = dokku(`auth:oidc:list ${FRONTEND_SERVICE}`);
+    list = dokku(`sso:oidc:list ${FRONTEND_SERVICE}`);
     expect(list).toContain(OIDC_CLIENT_ID);
   });
 });

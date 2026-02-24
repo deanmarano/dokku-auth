@@ -4,8 +4,8 @@ import { dokku } from './helpers';
 /**
  * Full stack E2E tests
  *
- * These tests set up the complete auth stack and verify end-to-end flows.
- * Requires Docker and dokku-auth plugin to be available.
+ * These tests set up the complete sso stack and verify end-to-end flows.
+ * Requires Docker and dokku-sso plugin to be available.
  */
 
 const DOKKU_HOST = process.env.DOKKU_HOST || 'localhost';
@@ -37,34 +37,34 @@ test.describe('Full Auth Stack E2E', () => {
   test.beforeAll(async () => {
     // Create directory service
     console.log('Creating directory service...');
-    dokku(`auth:create ${SERVICE_NAME}`);
+    dokku(`sso:create ${SERVICE_NAME}`);
 
     // Get the HTTP URL for LLDAP
-    const info = dokku(`auth:info ${SERVICE_NAME}`);
+    const info = dokku(`sso:info ${SERVICE_NAME}`);
     console.log('Directory service info:', info);
   });
 
   test.afterAll(async () => {
     // Cleanup
     try {
-      dokku(`auth:frontend:destroy ${FRONTEND_NAME} -f`, { quiet: true });
+      dokku(`sso:frontend:destroy ${FRONTEND_NAME} -f`, { quiet: true });
     } catch (e: any) {
       console.log('[cleanup] frontend:destroy:', e.stderr?.trim() || e.message);
     }
     try {
-      dokku(`auth:destroy ${SERVICE_NAME} -f`, { quiet: true });
+      dokku(`sso:destroy ${SERVICE_NAME} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 
   test('directory service should be healthy', async () => {
-    const status = dokku(`auth:status ${SERVICE_NAME}`);
+    const status = dokku(`sso:status ${SERVICE_NAME}`);
     expect(status).toContain('healthy');
   });
 
   test('should be able to get credentials', async () => {
-    const creds = dokku(`auth:credentials ${SERVICE_NAME}`);
+    const creds = dokku(`sso:credentials ${SERVICE_NAME}`);
     expect(creds).toContain('ADMIN_PASSWORD');
     expect(creds).toContain('BASE_DN');
     expect(creds).toContain('BIND_DN');
@@ -78,28 +78,28 @@ test.describe('Full Auth Stack E2E', () => {
 
   test('should create and use frontend service', async () => {
     // Create frontend
-    dokku(`auth:frontend:create ${FRONTEND_NAME}`);
-    dokku(`auth:frontend:config ${FRONTEND_NAME} DOMAIN=auth.${TEST_DOMAIN}`);
-    dokku(`auth:frontend:use-directory ${FRONTEND_NAME} ${SERVICE_NAME}`);
+    dokku(`sso:frontend:create ${FRONTEND_NAME}`);
+    dokku(`sso:frontend:config ${FRONTEND_NAME} DOMAIN=auth.${TEST_DOMAIN}`);
+    dokku(`sso:frontend:use-directory ${FRONTEND_NAME} ${SERVICE_NAME}`);
 
     // Apply config
-    dokku(`auth:frontend:apply ${FRONTEND_NAME}`);
+    dokku(`sso:frontend:apply ${FRONTEND_NAME}`);
 
     // Check status
-    const status = dokku(`auth:frontend:status ${FRONTEND_NAME}`);
+    const status = dokku(`sso:frontend:status ${FRONTEND_NAME}`);
     expect(status).toContain('running');
   });
 
   test('should enable OIDC', async () => {
-    dokku(`auth:oidc:enable ${FRONTEND_NAME}`);
+    dokku(`sso:oidc:enable ${FRONTEND_NAME}`);
 
     // Add a test client
-    const result = dokku(`auth:oidc:add-client ${FRONTEND_NAME} test-client`);
+    const result = dokku(`sso:oidc:add-client ${FRONTEND_NAME} test-client`);
     expect(result).toContain('Client added');
     expect(result).toContain('Client Secret');
 
     // List clients
-    const clients = dokku(`auth:oidc:list ${FRONTEND_NAME}`);
+    const clients = dokku(`sso:oidc:list ${FRONTEND_NAME}`);
     expect(clients).toContain('test-client');
   });
 
@@ -107,7 +107,7 @@ test.describe('Full Auth Stack E2E', () => {
     // Doctor may fail on port checks when run from host (network isolation)
     // but should still run and report status
     try {
-      const doctorResult = dokku(`auth:doctor ${SERVICE_NAME}`);
+      const doctorResult = dokku(`sso:doctor ${SERVICE_NAME}`);
       expect(doctorResult).toContain('Running diagnostics');
     } catch (error: any) {
       // Command may exit non-zero if issues found, but should still produce output
@@ -117,7 +117,7 @@ test.describe('Full Auth Stack E2E', () => {
 
   test('sync should work with no errors', async () => {
     // Sync (may report 0 members if no users yet)
-    const syncResult = dokku(`auth:sync ${SERVICE_NAME}`);
+    const syncResult = dokku(`sso:sync ${SERVICE_NAME}`);
     expect(syncResult).toContain('Sync');
   });
 });

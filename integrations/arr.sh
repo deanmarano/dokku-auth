@@ -45,7 +45,7 @@ Use Authelia forward auth to protect them.
 
 Protect the App:
 ----------------
-dokku auth:protect $APP \\
+dokku sso:protect $APP \\
   --service $SERVICE \\
   --bypass-path "/api/*" \\
   --bypass-path "/feed/*"
@@ -60,7 +60,7 @@ API Key Authentication:
 *arr apps use API keys for programmatic access.
 Find the API key in: Settings > General > Security
 
-For external apps, use the API key instead of user auth:
+For external apps, use the API key instead of user sso:
   https://<domain>/api/v3/...?apikey=<apikey>
 
 Additional Bypass Paths (if needed):
@@ -90,7 +90,7 @@ preset_ldap_config() {
 *arr applications (Radarr, Sonarr, Prowlarr, Lidarr, etc.)
 do not support LDAP authentication.
 
-Use forward auth (dokku auth:protect) instead.
+Use forward auth (dokku sso:protect) instead.
 
 EOF
 }

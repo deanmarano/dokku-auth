@@ -18,7 +18,7 @@ import {
 /**
  * Immich OIDC Integration E2E Test
  *
- * Tests Immich deployed via library:checkout with Authelia forward auth:
+ * Tests Immich deployed via library:checkout with Authelia forward sso:
  * 1. Deploy Immich as a proper dokku app (with PostgreSQL)
  * 2. Protect it with Authelia forward auth
  * 3. Verify auth redirect and login flow

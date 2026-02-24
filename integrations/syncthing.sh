@@ -45,7 +45,7 @@ Use Authelia forward auth to protect the web UI.
 
 Protect the App:
 ----------------
-dokku auth:protect $APP \\
+dokku sso:protect $APP \\
   --service $SERVICE \\
   --bypass-path "/rest/*"
 
@@ -87,7 +87,7 @@ Syncthing LDAP Support:
 =======================
 
 Syncthing does not support LDAP authentication.
-Use forward auth (dokku auth:protect) instead.
+Use forward auth (dokku sso:protect) instead.
 
 EOF
 }

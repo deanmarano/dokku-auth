@@ -56,7 +56,7 @@ Navidrome supports reverse proxy (header) authentication.
    ND_REVERSEPROXYWHITELIST=172.16.0.0/12
 
 2. Protect with Authelia:
-   dokku auth:protect $APP \\
+   dokku sso:protect $APP \\
      --service $SERVICE \\
      --bypass-path "/rest/*" \\
      --bypass-path "/share/*"

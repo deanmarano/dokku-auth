@@ -17,12 +17,12 @@ import {
 /**
  * Grafana OIDC Integration E2E Test
  *
- * Tests Grafana deployed via library:checkout with Authelia forward auth:
+ * Tests Grafana deployed via library:checkout with Authelia forward sso:
  * 1. Deploy Grafana as a proper dokku app
- * 2. Protect it with Authelia forward auth (via auth:protect)
+ * 2. Protect it with Authelia forward auth (via sso:protect)
  * 3. Verify the full browser login flow
  *
- * Note: With library:checkout + auth:protect, the auth flow uses forward auth
+ * Note: With library:checkout + sso:protect, the auth flow uses forward auth
  * (Authelia sits in front of the app) rather than native OIDC. This tests the
  * real user-facing integration path.
  */

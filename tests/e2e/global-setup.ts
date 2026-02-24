@@ -4,7 +4,7 @@ import { dokku, waitForHealthy, libraryInstalled } from './helpers';
  * Global setup for E2E tests
  *
  * Creates the shared LLDAP service and test users before any tests run.
- * Verifies required plugins (auth, library) are installed.
+ * Verifies required plugins (sso, library) are installed.
  */
 
 const SHARED_SERVICE = process.env.E2E_SERVICE_NAME || 'e2e-shared';
@@ -16,7 +16,7 @@ async function globalSetup() {
   if (SKIP_SETUP) {
     console.log('Skipping global setup (SKIP_GLOBAL_SETUP=true)');
     console.log('Make sure to manually create the test service:');
-    console.log(`  dokku auth:create ${SHARED_SERVICE}`);
+    console.log(`  dokku sso:create ${SHARED_SERVICE}`);
     return;
   }
 
@@ -26,9 +26,9 @@ async function globalSetup() {
   try {
     dokku('plugin:list', { quiet: true, prefix: '[setup] ', logOutput: false });
     const plugins = dokku('plugin:list', { quiet: true, prefix: '[setup] ', logOutput: false });
-    if (!plugins.includes('auth')) {
-      console.log('Installing auth plugin...');
-      dokku('plugin:install file:///plugin-src --name auth', { quiet: true, prefix: '[setup] ', logOutput: false });
+    if (!plugins.includes('sso')) {
+      console.log('Installing sso plugin...');
+      dokku('plugin:install file:///plugin-src --name sso', { quiet: true, prefix: '[setup] ', logOutput: false });
     }
   } catch (error) {
     console.log('Could not check/install plugin, continuing...');
@@ -45,18 +45,18 @@ async function globalSetup() {
 
   // Check if service already exists
   try {
-    const status = dokku(`auth:status ${SHARED_SERVICE}`, { quiet: true, prefix: '[setup] ', logOutput: false });
+    const status = dokku(`sso:status ${SHARED_SERVICE}`, { quiet: true, prefix: '[setup] ', logOutput: false });
     if (status.includes('healthy')) {
       console.log('Shared service already healthy');
       return;
     } else {
       console.log('Shared service exists but not healthy, applying config...');
-      dokku(`auth:provider:apply ${SHARED_SERVICE}`, { prefix: '[setup] ' });
+      dokku(`sso:provider:apply ${SHARED_SERVICE}`, { prefix: '[setup] ' });
     }
   } catch {
     // Service doesn't exist, create it
     console.log('Creating shared LLDAP service...');
-    dokku(`auth:create ${SHARED_SERVICE}`, { prefix: '[setup] ' });
+    dokku(`sso:create ${SHARED_SERVICE}`, { prefix: '[setup] ' });
   }
 
   // Wait for service to be ready
@@ -67,7 +67,7 @@ async function globalSetup() {
     console.error('Service did not become ready in time');
     // Try to get logs for debugging
     try {
-      const logs = dokku(`auth:logs ${SHARED_SERVICE} -n 50`, { prefix: '[setup] ' });
+      const logs = dokku(`sso:logs ${SHARED_SERVICE} -n 50`, { prefix: '[setup] ' });
       console.log('Service logs:', logs);
     } catch {}
     throw new Error('Shared service is not healthy');
@@ -75,7 +75,7 @@ async function globalSetup() {
 
   // Verify service
   try {
-    const doctorResult = dokku(`auth:doctor ${SHARED_SERVICE}`, { quiet: true, prefix: '[setup] ', logOutput: false });
+    const doctorResult = dokku(`sso:doctor ${SHARED_SERVICE}`, { quiet: true, prefix: '[setup] ', logOutput: false });
     console.log('Doctor result:', doctorResult);
   } catch (error) {
     console.log('Doctor check had issues, continuing anyway...');

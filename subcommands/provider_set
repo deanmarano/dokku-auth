@@ -6,14 +6,14 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 # Strip command prefix if dokku passed it
-[[ "${1:-}" == auth:* ]] && shift
+[[ "${1:-}" == sso:* ]] && shift
 
 
 SERVICE="$1"
 PROVIDER="$2"
 
 if [[ -z "$SERVICE" ]] || [[ -z "$PROVIDER" ]]; then
-  echo "Usage: dokku auth:provider:set <service> <provider>" >&2
+  echo "Usage: dokku sso:provider:set <service> <provider>" >&2
   echo "" >&2
   echo "Available providers:"
   list_directory_providers | sed 's/^/  /'
@@ -67,4 +67,4 @@ fi
 echo "$PROVIDER" > "$SERVICE_ROOT/PROVIDER"
 
 echo "-----> Provider set to $PROVIDER"
-echo "       Run 'dokku auth:provider:apply $SERVICE' to apply changes"
+echo "       Run 'dokku sso:provider:apply $SERVICE' to apply changes"

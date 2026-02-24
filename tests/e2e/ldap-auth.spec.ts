@@ -129,7 +129,7 @@ test.describe('LDAP Authentication', () => {
     // Create LLDAP directory service
     console.log('Creating LLDAP directory service...');
     try {
-      dokku(`auth:create ${SERVICE_NAME}`);
+      dokku(`sso:create ${SERVICE_NAME}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -141,8 +141,8 @@ test.describe('LDAP Authentication', () => {
     for (let i = 0; i < 30; i++) {
       try {
         const statusCmd = USE_SUDO
-          ? `sudo dokku auth:status ${SERVICE_NAME}`
-          : `dokku auth:status ${SERVICE_NAME}`;
+          ? `sudo dokku sso:status ${SERVICE_NAME}`
+          : `dokku sso:status ${SERVICE_NAME}`;
         const status = execSync(statusCmd, { encoding: 'utf-8' });
         if (status.includes('healthy')) {
           healthy = true;
@@ -165,16 +165,16 @@ test.describe('LDAP Authentication', () => {
   test.afterAll(async () => {
     console.log('=== Cleaning up LDAP authentication test ===');
     try {
-      dokku(`auth:destroy ${SERVICE_NAME} -f`, { quiet: true });
+      dokku(`sso:destroy ${SERVICE_NAME} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 
   test('LLDAP service should be healthy', async () => {
     const statusCmd = USE_SUDO
-      ? `sudo dokku auth:status ${SERVICE_NAME}`
-      : `dokku auth:status ${SERVICE_NAME}`;
+      ? `sudo dokku sso:status ${SERVICE_NAME}`
+      : `dokku sso:status ${SERVICE_NAME}`;
     const status = execSync(statusCmd, { encoding: 'utf-8' });
     expect(status).toContain('healthy');
   });

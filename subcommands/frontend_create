@@ -6,7 +6,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 # Strip command prefix if dokku passed it
-[[ "${1:-}" == auth:* ]] && shift
+[[ "${1:-}" == sso:* ]] && shift
 
 # Parse arguments
 SERVICE=""
@@ -42,9 +42,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$SERVICE" ]]; then
-  echo "Usage: dokku auth:frontend:create <service> [--provider <provider>] [--app <dokku-app>]" >&2
+  echo "Usage: dokku sso:frontend:create <service> [--provider <provider>] [--app <dokku-app>]" >&2
   echo "" >&2
-  echo "Create a new frontend auth service" >&2
+  echo "Create a new frontend SSO service" >&2
   echo "" >&2
   echo "Options:" >&2
   echo "  --provider <provider>  Frontend provider to use (default: $DEFAULT_FRONTEND_PROVIDER)" >&2
@@ -78,7 +78,7 @@ if frontend_service_exists "$SERVICE" && [[ -z "$ADOPT_APP" ]]; then
   exit 1
 fi
 
-echo "-----> Creating frontend auth service $SERVICE (provider: $PROVIDER)"
+echo "-----> Creating frontend SSO service $SERVICE (provider: $PROVIDER)"
 
 # Create service directory (idempotent for adopt case)
 mkdir -p "$SERVICE_ROOT/config" "$SERVICE_ROOT/data"
@@ -100,10 +100,10 @@ echo "-----> Frontend service $SERVICE created"
 echo ""
 if [[ -n "$ADOPT_APP" ]]; then
   echo "       Next steps:"
-  echo "       1. Protect an app: dokku auth:frontend:protect $SERVICE <app>"
+  echo "       1. Protect an app: dokku sso:frontend:protect $SERVICE <app>"
 else
   echo "       Next steps:"
-  echo "       1. Configure domain: dokku auth:frontend:config $SERVICE DOMAIN=auth.example.com"
-  echo "       2. Link to directory: dokku auth:frontend:use-directory $SERVICE <directory-service>"
-  echo "       3. Apply config:      dokku auth:frontend:apply $SERVICE"
+  echo "       1. Configure domain: dokku sso:frontend:config $SERVICE DOMAIN=auth.example.com"
+  echo "       2. Link to directory: dokku sso:frontend:use-directory $SERVICE <directory-service>"
+  echo "       3. Apply config:      dokku sso:frontend:apply $SERVICE"
 fi

@@ -54,7 +54,7 @@ http:
     - 172.16.0.0/12  # Docker network
 
 Then protect with Authelia:
-  dokku auth:protect $APP \\
+  dokku sso:protect $APP \\
     --service $SERVICE \\
     --bypass-path "/api/*" \\
     --bypass-path "/auth/*" \\

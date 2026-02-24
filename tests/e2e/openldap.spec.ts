@@ -21,7 +21,7 @@ test.describe('OpenLDAP Directory Provider', () => {
     // Create OpenLDAP directory service
     console.log('Creating OpenLDAP directory service...');
     try {
-      dokku(`auth:create ${SERVICE_NAME} --provider openldap`);
+      dokku(`sso:create ${SERVICE_NAME} --provider openldap`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -33,7 +33,7 @@ test.describe('OpenLDAP Directory Provider', () => {
     if (!healthy) {
       // Get logs for debugging
       try {
-        const logs = dokku(`auth:logs ${SERVICE_NAME} -n 50`);
+        const logs = dokku(`sso:logs ${SERVICE_NAME} -n 50`);
         console.log('OpenLDAP logs:', logs);
       } catch {}
       throw new Error('OpenLDAP service not healthy');
@@ -45,19 +45,19 @@ test.describe('OpenLDAP Directory Provider', () => {
   test.afterAll(async () => {
     console.log('=== Cleaning up OpenLDAP test ===');
     try {
-      dokku(`auth:destroy ${SERVICE_NAME} -f`, { quiet: true });
+      dokku(`sso:destroy ${SERVICE_NAME} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 
   test('service status shows healthy', async () => {
-    const status = dokku(`auth:status ${SERVICE_NAME}`);
+    const status = dokku(`sso:status ${SERVICE_NAME}`);
     expect(status).toContain('healthy');
   });
 
   test('service info shows OpenLDAP provider', async () => {
-    const info = dokku(`auth:info ${SERVICE_NAME}`);
+    const info = dokku(`sso:info ${SERVICE_NAME}`);
     expect(info.toLowerCase()).toContain('openldap');
   });
 
@@ -126,11 +126,11 @@ test.describe('OpenLDAP Directory Provider', () => {
 
     console.log('Groups search result:', result);
     // Should have the default users group
-    expect(result).toContain('dokku-auth-default-users');
+    expect(result).toContain('dokku-sso-default-users');
   });
 
   test('doctor check passes', async () => {
-    const result = dokku(`auth:doctor ${SERVICE_NAME}`);
+    const result = dokku(`sso:doctor ${SERVICE_NAME}`);
     // Doctor should not report errors
     expect(result.toLowerCase()).not.toContain('error');
   });

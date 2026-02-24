@@ -44,7 +44,7 @@ Calibre-Web supports LDAP and reverse proxy authentication.
 
 Option 1: LDAP Authentication
 -----------------------------
-Use 'dokku auth:integrate $SERVICE $APP --preset calibreweb'
+Use 'dokku sso:integrate $SERVICE $APP --preset calibreweb'
 and configure LDAP in the admin panel.
 
 Option 2: Reverse Proxy Authentication
@@ -54,7 +54,7 @@ Option 2: Reverse Proxy Authentication
    - Reverse Proxy Header Name: Remote-User
 
 2. Protect with Authelia:
-   dokku auth:protect $APP \\
+   dokku sso:protect $APP \\
      --service $SERVICE \\
      --bypass-path "/opds/*" \\
      --bypass-path "/kobo/*"

@@ -35,7 +35,7 @@ export interface ExecResult {
   stderr: string;
 }
 
-export class DokkuAuth {
+export class DokkuSso {
   private services: Array<{ type: 'directory' | 'frontend'; name: string }> = [];
 
   /** Check if running against remote Dokku */
@@ -45,8 +45,8 @@ export class DokkuAuth {
 
   /** Execute a dokku command and return exit code, stdout, stderr */
   async exec(command: string): Promise<ExecResult> {
-    // Handle both "auth:create foo" and "create foo" formats
-    const fullCmd = command.startsWith('auth:') ? command : `auth:${command}`;
+    // Handle both "sso:create foo" and "create foo" formats
+    const fullCmd = command.startsWith('sso:') ? command : `sso:${command}`;
     const localCmd = USE_SUDO ? `sudo dokku ${fullCmd}` : `dokku ${fullCmd}`;
     const cmd = this.isRemote()
       ? `ssh -o StrictHostKeyChecking=no -p ${DOKKU_SSH_PORT} dokku@${DOKKU_HOST} ${fullCmd}`
@@ -64,13 +64,13 @@ export class DokkuAuth {
     }
   }
 
-  /** Run a dokku auth command (local or remote via SSH)
+  /** Run a dokku sso command (local or remote via SSH)
    * First arg is the subcommand (e.g., 'create', 'info'), rest are arguments
-   * Becomes: dokku auth:create <service> or dokku auth:info <service>
+   * Becomes: dokku sso:create <service> or dokku sso:info <service>
    */
   run(...args: string[]): string {
     const [subcommand, ...rest] = args;
-    const fullCmd = `auth:${subcommand}`;
+    const fullCmd = `sso:${subcommand}`;
     const localCmd = USE_SUDO ? `sudo dokku ${fullCmd} ${rest.join(' ')}` : `dokku ${fullCmd} ${rest.join(' ')}`;
     const cmd = this.isRemote()
       ? `ssh -o StrictHostKeyChecking=no -p ${DOKKU_SSH_PORT} dokku@${DOKKU_HOST} ${fullCmd} ${rest.join(' ')}`
@@ -82,7 +82,7 @@ export class DokkuAuth {
   /** Run a dokku command asynchronously */
   async runAsync(...args: string[]): Promise<string> {
     const [subcommand, ...rest] = args;
-    const fullCmd = `auth:${subcommand}`;
+    const fullCmd = `sso:${subcommand}`;
     const localCmd = USE_SUDO ? `sudo dokku ${fullCmd} ${rest.join(' ')}` : `dokku ${fullCmd} ${rest.join(' ')}`;
     const cmd = this.isRemote()
       ? `ssh -o StrictHostKeyChecking=no -p ${DOKKU_SSH_PORT} dokku@${DOKKU_HOST} ${fullCmd} ${rest.join(' ')}`
@@ -92,7 +92,7 @@ export class DokkuAuth {
     return stdout;
   }
 
-  /** Run a generic dokku command (not auth:*) */
+  /** Run a generic dokku command (not sso:*) */
   runDokku(...args: string[]): string {
     const localCmd = USE_SUDO ? `sudo dokku ${args.join(' ')}` : `dokku ${args.join(' ')}`;
     const cmd = this.isRemote()
@@ -230,17 +230,17 @@ export class DokkuAuth {
   /** Install the plugin on the Dokku host */
   static installPlugin(sourcePath: string): void {
     if (DOKKU_HOST !== 'localhost' && DOKKU_HOST !== '127.0.0.1') {
-      execSync(`scp -r -P ${DOKKU_SSH_PORT} ${sourcePath} dokku@${DOKKU_HOST}:/tmp/dokku-auth`);
-      execSync(`ssh -p ${DOKKU_SSH_PORT} dokku@${DOKKU_HOST} sudo dokku plugin:install file:///tmp/dokku-auth --name auth`);
+      execSync(`scp -r -P ${DOKKU_SSH_PORT} ${sourcePath} dokku@${DOKKU_HOST}:/tmp/dokku-sso`);
+      execSync(`ssh -p ${DOKKU_SSH_PORT} dokku@${DOKKU_HOST} sudo dokku plugin:install file:///tmp/dokku-sso --name sso`);
     } else {
-      execSync(`sudo dokku plugin:install file://${sourcePath} --name auth`);
+      execSync(`sudo dokku plugin:install file://${sourcePath} --name sso`);
     }
   }
 }
 
 /** Create a test dokku app */
 export async function createTestApp(name: string): Promise<string> {
-  const dokku = new DokkuAuth();
+  const dokku = new DokkuSso();
   dokku.runDokku('apps:create', name);
   // Note: We don't deploy the app - linking works without a running app
   return name;
@@ -249,7 +249,7 @@ export async function createTestApp(name: string): Promise<string> {
 /** Destroy a test dokku app */
 export async function destroyTestApp(name: string): Promise<void> {
   try {
-    const dokku = new DokkuAuth();
+    const dokku = new DokkuSso();
     dokku.runDokku('apps:destroy', name, '--force');
   } catch {
     // Already destroyed
@@ -258,7 +258,7 @@ export async function destroyTestApp(name: string): Promise<void> {
 
 /** Get app config as object */
 export function getAppConfig(app: string): Record<string, string> {
-  const dokku = new DokkuAuth();
+  const dokku = new DokkuSso();
   const output = dokku.runDokku('config:export', app);
   const config: Record<string, string> = {};
 

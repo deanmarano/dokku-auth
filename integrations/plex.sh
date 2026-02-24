@@ -50,7 +50,7 @@ Options for protecting Plex:
    - Users authenticate via Authelia, then access Plex
    - Note: Plex apps/clients still use plex.tv auth
 
-   dokku auth:protect $APP --service $SERVICE
+   dokku sso:protect $APP --service $SERVICE
 
 2. Network-level protection:
    - Use firewall rules to restrict access
@@ -68,7 +68,7 @@ Important Considerations:
 - Consider using Overseerr/Ombi for request management (supports OIDC)
 
 For Plex companion apps with better auth support:
-- Overseerr: dokku auth:integrate $SERVICE overseerr --preset overseerr
+- Overseerr: dokku sso:integrate $SERVICE overseerr --preset overseerr
 - Tautulli: Use proxy auth protection
 
 EOF

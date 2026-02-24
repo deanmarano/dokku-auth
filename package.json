@@ -1,5 +1,5 @@
 {
-  "name": "dokku-auth-tests",
+  "name": "dokku-sso-tests",
   "type": "module",
   "scripts": {
     "test": "vitest run",

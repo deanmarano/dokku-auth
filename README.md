@@ -1,4 +1,4 @@
-# dokku-auth
+# dokku-sso
 
 LDAP directory and SSO authentication plugin for [Dokku](https://dokku.com).
 
@@ -9,29 +9,29 @@ LDAP directory and SSO authentication plugin for [Dokku](https://dokku.com).
 ## Installation
 
 ```bash
-dokku plugin:install https://github.com/deanmarano/dokku-auth.git auth
+dokku plugin:install https://github.com/deanmarano/dokku-sso.git sso
 ```
 
 ## Quick Start
 
 ```bash
 # Create a directory service (LLDAP by default)
-dokku auth:create production
+dokku sso:create production
 
 # Link an app
-dokku auth:link production myapp
+dokku sso:link production myapp
 dokku ps:restart myapp
 
 # Optionally add SSO with Authelia
-dokku auth:frontend:create auth --app authelia
+dokku sso:frontend:create auth --app authelia
 # Or deploy a new one:
-dokku auth:frontend:create auth
-dokku auth:frontend:config auth DOMAIN=auth.example.com
-dokku auth:frontend:use-directory auth production
-dokku auth:frontend:apply auth
+dokku sso:frontend:create auth
+dokku sso:frontend:config auth DOMAIN=auth.example.com
+dokku sso:frontend:use-directory auth production
+dokku sso:frontend:apply auth
 
 # Protect an app with forward auth
-dokku auth:frontend:protect auth myapp
+dokku sso:frontend:protect auth myapp
 ```
 
 ## Commands
@@ -40,55 +40,55 @@ dokku auth:frontend:protect auth myapp
 
 | Command | Description |
 |---|---|
-| `auth:create <service>` | Create directory service |
-| `auth:destroy <service> [-f]` | Delete directory service |
-| `auth:list` | List all services |
-| `auth:info <service>` | Show service details |
-| `auth:status <service>` | Health check |
-| `auth:logs <service> [-t]` | View logs |
-| `auth:doctor <service> [-v]` | Diagnose issues |
-| `auth:credentials <service>` | Show LDAP bind credentials |
-| `auth:link <service> <app>` | Link app to directory |
-| `auth:unlink <service> <app>` | Unlink app |
-| `auth:sync <service>` | Sync default group to app groups |
-| `auth:providers` | List available providers |
-| `auth:provider:set <svc> <provider>` | Change provider |
-| `auth:provider:config <svc> KEY=value` | Configure provider |
-| `auth:provider:apply <svc>` | Apply configuration |
+| `sso:create <service>` | Create directory service |
+| `sso:destroy <service> [-f]` | Delete directory service |
+| `sso:list` | List all services |
+| `sso:info <service>` | Show service details |
+| `sso:status <service>` | Health check |
+| `sso:logs <service> [-t]` | View logs |
+| `sso:doctor <service> [-v]` | Diagnose issues |
+| `sso:credentials <service>` | Show LDAP bind credentials |
+| `sso:link <service> <app>` | Link app to directory |
+| `sso:unlink <service> <app>` | Unlink app |
+| `sso:sync <service>` | Sync default group to app groups |
+| `sso:providers` | List available providers |
+| `sso:provider:set <svc> <provider>` | Change provider |
+| `sso:provider:config <svc> KEY=value` | Configure provider |
+| `sso:provider:apply <svc>` | Apply configuration |
 
 ### Frontend Services (SSO/2FA)
 
 | Command | Description |
 |---|---|
-| `auth:frontend:create <service> [--app <app>]` | Create or adopt frontend service |
-| `auth:frontend:destroy <service> [-f] [--keep-app]` | Delete frontend service |
-| `auth:frontend:list` | List all frontend services |
-| `auth:frontend:info <service>` | Show service details |
-| `auth:frontend:status <service>` | Health check |
-| `auth:frontend:logs <service>` | View logs |
-| `auth:frontend:use-directory <svc> <dir-svc>` | Link to directory |
-| `auth:frontend:protect <svc> <app>` | Add SSO protection |
-| `auth:frontend:unprotect <svc> <app>` | Remove protection |
-| `auth:frontend:provider:set <svc> <prov>` | Change provider |
-| `auth:frontend:config <svc> KEY=value` | Configure provider |
-| `auth:frontend:apply <svc>` | Apply configuration |
+| `sso:frontend:create <service> [--app <app>]` | Create or adopt frontend service |
+| `sso:frontend:destroy <service> [-f] [--keep-app]` | Delete frontend service |
+| `sso:frontend:list` | List all frontend services |
+| `sso:frontend:info <service>` | Show service details |
+| `sso:frontend:status <service>` | Health check |
+| `sso:frontend:logs <service>` | View logs |
+| `sso:frontend:use-directory <svc> <dir-svc>` | Link to directory |
+| `sso:frontend:protect <svc> <app>` | Add SSO protection |
+| `sso:frontend:unprotect <svc> <app>` | Remove protection |
+| `sso:frontend:provider:set <svc> <prov>` | Change provider |
+| `sso:frontend:config <svc> KEY=value` | Configure provider |
+| `sso:frontend:apply <svc>` | Apply configuration |
 
 ### OIDC (OpenID Connect)
 
 | Command | Description |
 |---|---|
-| `auth:oidc:enable <frontend-svc>` | Enable OIDC |
-| `auth:oidc:disable <frontend-svc>` | Disable OIDC |
-| `auth:oidc:add-client <svc> <id> [secret] [redirect-uri]` | Add client |
-| `auth:oidc:remove-client <svc> <client-id>` | Remove client |
-| `auth:oidc:list <svc>` | List clients |
+| `sso:oidc:enable <frontend-svc>` | Enable OIDC |
+| `sso:oidc:disable <frontend-svc>` | Disable OIDC |
+| `sso:oidc:add-client <svc> <id> [secret] [redirect-uri]` | Add client |
+| `sso:oidc:remove-client <svc> <client-id>` | Remove client |
+| `sso:oidc:list <svc>` | List clients |
 
 ## App Environment Variables
 
 When linked to a directory service, apps receive:
 
 ```
-LDAP_URL=ldap://dokku.auth.directory.production:3890
+LDAP_URL=ldap://dokku.sso.directory.production:3890
 LDAP_BASE_DN=dc=dokku,dc=local
 LDAP_BIND_DN=uid=admin,ou=people,dc=dokku,dc=local
 LDAP_BIND_PASSWORD=<auto-generated>
@@ -125,10 +125,10 @@ Pre-configured settings are available in `integrations/` for popular apps:
 
 ## Default User Group
 
-Users added to `dokku-auth-default-users` are automatically synced to all app groups:
+Users added to `dokku-sso-default-users` are automatically synced to all app groups:
 
 ```bash
-dokku auth:sync production
+dokku sso:sync production
 ```
 
 ## Development

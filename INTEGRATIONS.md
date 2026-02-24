@@ -1,6 +1,6 @@
 # Homelab App Integrations
 
-This document tracks integrations for the dokku-auth plugin. Each integration provides pre-configured OIDC client settings and/or LDAP configuration helpers for popular self-hosted applications.
+This document tracks integrations for the dokku-sso plugin. Each integration provides pre-configured OIDC client settings and/or LDAP configuration helpers for popular self-hosted applications.
 
 > **Warning:** Most integrations listed here are **untested** and were ported from an earlier
 > version of the plugin. Only a subset have been validated with E2E tests (marked with ✅ below).
@@ -10,13 +10,13 @@ This document tracks integrations for the dokku-auth plugin. Each integration pr
 
 ```bash
 # Link an app to the directory service (sets LDAP env vars)
-dokku auth:link <service> <app>
+dokku sso:link <service> <app>
 
 # Add an OIDC client for an app
-dokku auth:oidc:add-client <frontend-service> <client-id> [secret] [redirect-uri]
+dokku sso:oidc:add-client <frontend-service> <client-id> [secret] [redirect-uri]
 
 # Protect an app with SSO (forward auth)
-dokku auth:frontend:protect <frontend-service> <app>
+dokku sso:frontend:protect <frontend-service> <app>
 ```
 
 ## Available Presets (36 apps)
@@ -85,20 +85,20 @@ Legend: ✅ = Tested with E2E tests
 
 ```bash
 # Create auth service
-dokku auth:create default --gateway-domain auth.example.com
+dokku sso:create default --gateway-domain auth.example.com
 
 # Integrate Immich with OIDC
-dokku auth:integrate default immich-app --preset immich --set-env
+dokku sso:integrate default immich-app --preset immich --set-env
 
 # Or manually with oidc:add
-dokku auth:oidc:add default immich --preset immich --domain photos.example.com
+dokku sso:oidc:add default immich --preset immich --domain photos.example.com
 ```
 
 ### LDAP Integration (Jellyfin)
 
 ```bash
 # Jellyfin uses LDAP only (no OIDC)
-dokku auth:integrate default jellyfin-app --preset jellyfin
+dokku sso:integrate default jellyfin-app --preset jellyfin
 
 # Follow the printed instructions to configure LDAP plugin
 ```
@@ -107,10 +107,10 @@ dokku auth:integrate default jellyfin-app --preset jellyfin
 
 ```bash
 # Protect Radarr with forward auth, bypass API
-dokku auth:protect radarr-app --service default --bypass-path "/api/*"
+dokku sso:protect radarr-app --service default --bypass-path "/api/*"
 
 # Protect Sonarr similarly
-dokku auth:protect sonarr-app --service default --bypass-path "/api/*" --bypass-path "/feed/*"
+dokku sso:protect sonarr-app --service default --bypass-path "/api/*" --bypass-path "/feed/*"
 ```
 
 ## Preset Details

@@ -17,7 +17,7 @@ import {
 /**
  * Jellyfin LDAP Integration E2E Test
  *
- * Tests Jellyfin deployed via library:checkout with Authelia forward auth:
+ * Tests Jellyfin deployed via library:checkout with Authelia forward sso:
  * 1. Deploy Jellyfin as a proper dokku app
  * 2. Protect it with Authelia forward auth
  * 3. Verify auth redirect and login flow

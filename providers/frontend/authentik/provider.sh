@@ -21,12 +21,12 @@ REDIS_IMAGE="redis:7-alpine"
 # Get container names for Authentik resources
 get_authentik_postgres_container() {
   local SERVICE="$1"
-  echo "dokku.auth.frontend.${SERVICE}.postgres"
+  echo "dokku.sso.frontend.${SERVICE}.postgres"
 }
 
 get_authentik_redis_container() {
   local SERVICE="$1"
-  echo "dokku.auth.frontend.${SERVICE}.redis"
+  echo "dokku.sso.frontend.${SERVICE}.redis"
 }
 
 # Create and start the Authentik containers
@@ -88,7 +88,7 @@ provider_create_container() {
   docker run -d \
     --name "$POSTGRES_CONTAINER" \
     --restart unless-stopped \
-    --network "$AUTH_NETWORK" \
+    --network "$SSO_NETWORK" \
     -e "POSTGRES_USER=$POSTGRES_USER" \
     -e "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
     -e "POSTGRES_DB=$POSTGRES_DB" \
@@ -100,7 +100,7 @@ provider_create_container() {
   docker run -d \
     --name "$REDIS_CONTAINER" \
     --restart unless-stopped \
-    --network "$AUTH_NETWORK" \
+    --network "$SSO_NETWORK" \
     -v "$DATA_DIR/redis:/data" \
     "$REDIS_IMAGE" >/dev/null
 
@@ -142,7 +142,7 @@ provider_create_container() {
   docker run -d \
     --name "$SERVER_CONTAINER" \
     --restart unless-stopped \
-    --network "$AUTH_NETWORK" \
+    --network "$SSO_NETWORK" \
     "${ENV_VARS[@]}" \
     -v "$DATA_DIR/media:/media" \
     -v "$DATA_DIR/templates:/templates" \
@@ -155,7 +155,7 @@ provider_create_container() {
   docker run -d \
     --name "$WORKER_CONTAINER" \
     --restart unless-stopped \
-    --network "$AUTH_NETWORK" \
+    --network "$SSO_NETWORK" \
     "${ENV_VARS[@]}" \
     -v "$DATA_DIR/media:/media" \
     -v "$DATA_DIR/templates:/templates" \
@@ -408,7 +408,7 @@ provider_protect_app() {
   local APP_CONTAINER
   APP_CONTAINER=$("$DOKKU_BIN" ps:report "$APP" --ps-running-container < /dev/null 2>/dev/null || echo "")
   if [[ -n "$APP_CONTAINER" ]]; then
-    docker network connect "$AUTH_NETWORK" "$APP_CONTAINER" 2>/dev/null || true
+    docker network connect "$SSO_NETWORK" "$APP_CONTAINER" 2>/dev/null || true
   fi
 
   # Write nginx forward auth config
@@ -418,7 +418,7 @@ provider_protect_app() {
   local NGINX_CONF_DIR="$DOKKU_ROOT/$APP/nginx.conf.d"
   mkdir -p "$NGINX_CONF_DIR"
   cat > "$NGINX_CONF_DIR/forward-auth.conf" <<EOF
-# Authentik forward auth - managed by dokku-auth plugin
+# Authentik forward auth - managed by dokku-sso plugin
 # Server-level locations
 location /outpost.goauthentik.io {
     internal;

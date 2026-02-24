@@ -40,7 +40,7 @@ Emby LDAP Setup Instructions:
 =============================
 
 Emby uses LDAP via a plugin, not OIDC.
-Use 'dokku auth:integrate:emby' for LDAP setup.
+Use 'dokku sso:integrate:emby' for LDAP setup.
 
 EOF
 }
@@ -103,7 +103,7 @@ Emby LDAP Setup Instructions:
    - Try logging in with an LDAP user
 
 4. Create the emby_admin group in LLDAP:
-   dokku auth:groups:create $SERVICE emby_admin
+   dokku sso:groups:create $SERVICE emby_admin
 
 EOF
 }

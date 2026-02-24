@@ -63,7 +63,7 @@ function generateCerts(): void {
 
 let AUTHELIA_INTERNAL_IP: string;
 let ADMIN_PASSWORD: string;
-let AUTH_NETWORK: string;
+let SSO_NETWORK: string;
 
 test.describe('OIDC Application Browser Flow', () => {
   test.beforeAll(async () => {
@@ -75,7 +75,7 @@ test.describe('OIDC Application Browser Flow', () => {
     // 1. Create LLDAP directory service
     console.log('Creating LLDAP directory service...');
     try {
-      dokku(`auth:create ${DIRECTORY_SERVICE}`);
+      dokku(`sso:create ${DIRECTORY_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -93,18 +93,18 @@ test.describe('OIDC Application Browser Flow', () => {
     ADMIN_PASSWORD = creds.ADMIN_PASSWORD;
 
     // Determine the auth network
-    AUTH_NETWORK = execSync(
+    SSO_NETWORK = execSync(
       `docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' ${getDirectoryContainerId(DIRECTORY_SERVICE)}`,
       { encoding: 'utf-8' }
     )
       .trim()
       .split(' ')[0];
-    console.log(`Auth network: ${AUTH_NETWORK}`);
+    console.log(`Auth network: ${SSO_NETWORK}`);
 
     // 2. Create Authelia frontend service
     console.log('Creating Authelia frontend service...');
     try {
-      dokku(`auth:frontend:create ${FRONTEND_SERVICE}`);
+      dokku(`sso:frontend:create ${FRONTEND_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -113,12 +113,12 @@ test.describe('OIDC Application Browser Flow', () => {
 
     // 2b. Configure Authelia domain
     console.log('Configuring Authelia domain...');
-    dokku(`auth:frontend:config ${FRONTEND_SERVICE} DOMAIN=${AUTH_DOMAIN}`);
+    dokku(`sso:frontend:config ${FRONTEND_SERVICE} DOMAIN=${AUTH_DOMAIN}`);
 
     // 3. Link frontend to directory
     console.log('Linking frontend to directory...');
     try {
-      dokku(`auth:frontend:use-directory ${FRONTEND_SERVICE} ${DIRECTORY_SERVICE}`);
+      dokku(`sso:frontend:use-directory ${FRONTEND_SERVICE} ${DIRECTORY_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already linked')) {
         console.log('Link result:', e.message);
@@ -127,14 +127,14 @@ test.describe('OIDC Application Browser Flow', () => {
 
     // 4. Enable OIDC
     console.log('Enabling OIDC...');
-    dokku(`auth:oidc:enable ${FRONTEND_SERVICE}`);
+    dokku(`sso:oidc:enable ${FRONTEND_SERVICE}`);
 
     // 5. Add OIDC client for oauth2-proxy
     const REDIRECT_URI = `https://${APP_DOMAIN}:${OAUTH2_PROXY_HTTPS_PORT}/oauth2/callback`;
     console.log('Adding OIDC client...');
     try {
       dokku(
-        `auth:oidc:add-client ${FRONTEND_SERVICE} ${OIDC_CLIENT_ID} ${OIDC_CLIENT_SECRET} ${REDIRECT_URI}`
+        `sso:oidc:add-client ${FRONTEND_SERVICE} ${OIDC_CLIENT_ID} ${OIDC_CLIENT_SECRET} ${REDIRECT_URI}`
       );
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
@@ -145,7 +145,7 @@ test.describe('OIDC Application Browser Flow', () => {
     // 6. Apply frontend configuration (this starts the container)
     console.log('Applying frontend configuration...');
     try {
-      dokku(`auth:frontend:apply ${FRONTEND_SERVICE}`);
+      dokku(`sso:frontend:apply ${FRONTEND_SERVICE}`);
     } catch (e: any) {
       console.log('Apply result:', e.message);
     }
@@ -157,14 +157,14 @@ test.describe('OIDC Application Browser Flow', () => {
     const autheliaHealthy = await waitForHealthy(FRONTEND_SERVICE, 'frontend', 120000);
     if (!autheliaHealthy) {
       try {
-        const logs = dokku(`auth:frontend:logs ${FRONTEND_SERVICE} -n 50`);
+        const logs = dokku(`sso:frontend:logs ${FRONTEND_SERVICE} -n 50`);
         console.log('Authelia logs:', logs);
       } catch {}
       throw new Error('Authelia not healthy');
     }
 
     // Get Authelia container IP for internal communication
-    const autheliaContainerName = `dokku.auth.frontend.${FRONTEND_SERVICE}`;
+    const autheliaContainerName = `dokku.sso.frontend.${FRONTEND_SERVICE}`;
     AUTHELIA_INTERNAL_IP = getContainerIp(autheliaContainerName);
     console.log(`Authelia internal IP: ${AUTHELIA_INTERNAL_IP}`);
 
@@ -190,7 +190,7 @@ test.describe('OIDC Application Browser Flow', () => {
 
     execSync(
       `docker run -d --name ${BACKEND_CONTAINER} ` +
-        `--network ${AUTH_NETWORK} ` +
+        `--network ${SSO_NETWORK} ` +
         `traefik/whoami:latest`,
       { encoding: 'utf-8' }
     );
@@ -254,7 +254,7 @@ http {
 
     execSync(
       `docker run -d --name ${NGINX_CONTAINER} ` +
-        `--network ${AUTH_NETWORK} ` +
+        `--network ${SSO_NETWORK} ` +
         `-p ${AUTHELIA_HTTPS_PORT}:443 ` +
         `-p ${OAUTH2_PROXY_HTTPS_PORT}:4443 ` +
         `-v /tmp/nginx.conf:/etc/nginx/nginx.conf:ro ` +
@@ -301,7 +301,7 @@ http {
     // auth.test.local to nginx's container IP on port 443)
     execSync(
       `docker run -d --name ${OAUTH2_PROXY_CONTAINER} ` +
-        `--network ${AUTH_NETWORK} ` +
+        `--network ${SSO_NETWORK} ` +
         `-e OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180 ` +
         `-e OAUTH2_PROXY_PROVIDER=oidc ` +
         `-e OAUTH2_PROXY_OIDC_ISSUER_URL=https://${AUTH_DOMAIN} ` +
@@ -390,14 +390,14 @@ http {
       }
     }
     try {
-      dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true });
+      dokku(`sso:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true });
     } catch (e: any) {
       console.log('[cleanup] frontend:destroy:', e.stderr?.trim() || e.message);
     }
     try {
-      dokku(`auth:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
+      dokku(`sso:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 

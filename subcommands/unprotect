@@ -6,12 +6,12 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 # Strip command prefix if dokku passed it
-[[ "${1:-}" == auth:* ]] && shift
+[[ "${1:-}" == sso:* ]] && shift
 
 APP="$1"
 
 if [[ -z "$APP" ]]; then
-  echo "Usage: dokku auth:unprotect <app>" >&2
+  echo "Usage: dokku sso:unprotect <app>" >&2
   echo "" >&2
   echo "Remove SSO protection from an app." >&2
   echo "Auto-detects which frontend service protects this app." >&2

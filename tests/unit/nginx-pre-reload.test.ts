@@ -138,7 +138,7 @@ server {
   include /home/dokku/myapp/nginx.conf.d/*.conf;
 }`;
 
-const AUTHELIA_FORWARD_AUTH_CONF = `# Authelia forward auth - managed by dokku-auth plugin
+const AUTHELIA_FORWARD_AUTH_CONF = `# Authelia forward auth - managed by dokku-sso plugin
 # Server-level locations
 location /authelia-auth {
     internal;
@@ -167,7 +167,7 @@ auth_request_set $authelia_name $upstream_http_remote_name;
 auth_request_set $authelia_email $upstream_http_remote_email;
 error_page 401 = @forward_auth_login;`;
 
-const AUTHENTIK_FORWARD_AUTH_CONF = `# Authentik forward auth - managed by dokku-auth plugin
+const AUTHENTIK_FORWARD_AUTH_CONF = `# Authentik forward auth - managed by dokku-sso plugin
 # Server-level locations
 location /outpost.goauthentik.io {
     internal;

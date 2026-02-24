@@ -45,7 +45,7 @@ Use Authelia forward auth to protect it.
 
 Protect the App:
 ----------------
-dokku auth:protect $APP \\
+dokku sso:protect $APP \\
   --service $SERVICE \\
   --bypass-path "/api/*" \\
   --bypass-path "/feed/*"
@@ -73,7 +73,7 @@ In Settings > General > Authentication:
 Integration with Calibre:
 -------------------------
 If using Calibre-Web for reading, consider:
-dokku auth:integrate <service> calibreweb --preset calibreweb
+dokku sso:integrate <service> calibreweb --preset calibreweb
 
 Additional Bypass Paths (if needed):
 ------------------------------------
@@ -90,7 +90,7 @@ Readarr LDAP Support:
 =====================
 
 Readarr does not support LDAP authentication.
-Use forward auth (dokku auth:protect) instead.
+Use forward auth (dokku sso:protect) instead.
 
 EOF
 }

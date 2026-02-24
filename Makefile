@@ -2,7 +2,7 @@
 
 # Default target
 help:
-	@echo "dokku-auth development commands:"
+	@echo "dokku-sso development commands:"
 	@echo ""
 	@echo "  make deps              Install test dependencies"
 	@echo "  make test              Run all tests (unit + integration)"
@@ -49,7 +49,7 @@ test-env-up:
 	docker compose -f docker-compose.test.yml up -d dokku
 	@echo "Waiting for Dokku..."
 	@sleep 30
-	docker compose -f docker-compose.test.yml exec -T dokku dokku plugin:install file:///plugin-src --name auth || true
+	docker compose -f docker-compose.test.yml exec -T dokku dokku plugin:install file:///plugin-src --name sso || true
 	@echo ""
 	@echo "Dokku running at localhost:8080"
 	@echo "SSH: ssh -p 3022 dokku@localhost"
@@ -85,10 +85,10 @@ test-e2e-full:
 # Install plugin locally
 install:
 	@echo "Installing plugin..."
-	@sudo dokku plugin:install file://$$(pwd) --name auth || \
-		sudo dokku plugin:update auth
+	@sudo dokku plugin:install file://$$(pwd) --name sso || \
+		sudo dokku plugin:update sso
 
 # Uninstall plugin
 uninstall:
 	@echo "Uninstalling plugin..."
-	@sudo dokku plugin:uninstall auth || true
+	@sudo dokku plugin:uninstall sso || true

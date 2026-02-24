@@ -5,70 +5,70 @@ set -eo pipefail
 PLUGIN_BASE_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$PLUGIN_BASE_PATH/config"
 
-# Only handle auth commands
-[[ " auth:help auth " == *" $1 "* ]] || [[ "$1" == "auth:"* ]] || exit "${DOKKU_NOT_IMPLEMENTED_EXIT:-10}"
+# Only handle sso commands
+[[ " sso:help sso " == *" $1 "* ]] || [[ "$1" == "sso:"* ]] || exit "${DOKKU_NOT_IMPLEMENTED_EXIT:-10}"
 
 show_help() {
   cat << EOF
-usage: dokku auth[:COMMAND]
+usage: dokku sso[:COMMAND]
 
 Manage LDAP directory and SSO authentication for apps.
 
 Example:
 
-    $ dokku auth:list
+    $ dokku sso:list
       Directory services:
         production (lldap) - 3 apps
         staging (lldap) - 1 app
 
-dokku auth directory commands:
+dokku sso directory commands:
 
-    auth:create <service>                        create directory service
-    auth:destroy <service> [-f|--force]          delete directory service
-    auth:list                                    list all directory services
-    auth:info <service>                          print service information
-    auth:logs <service> [-t|--tail]              print container logs
-    auth:status <service> [-q|--quiet]           show status (exit: 0=healthy, 2=down)
-    auth:doctor <service>                        diagnose and fix issues
+    sso:create <service>                        create directory service
+    sso:destroy <service> [-f|--force]          delete directory service
+    sso:list                                    list all directory services
+    sso:info <service>                          print service information
+    sso:logs <service> [-t|--tail]              print container logs
+    sso:status <service> [-q|--quiet]           show status (exit: 0=healthy, 2=down)
+    sso:doctor <service>                        diagnose and fix issues
 
-    auth:create-user <svc> <user> <email> <pass>  create a user in directory
-    auth:link <service> <app>                    link app to directory service
-    auth:unlink <service> <app>                  unlink app from directory
-    auth:sync <service>                          sync default group to app groups
-    auth:credentials <service>                   show LDAP bind credentials
+    sso:create-user <svc> <user> <email> <pass>  create a user in directory
+    sso:link <service> <app>                    link app to directory service
+    sso:unlink <service> <app>                  unlink app from directory
+    sso:sync <service>                          sync default group to app groups
+    sso:credentials <service>                   show LDAP bind credentials
 
-    auth:protect <app>                           add SSO protection (auto-detect frontend)
-    auth:unprotect <app>                         remove SSO protection
+    sso:protect <app>                           add SSO protection (auto-detect frontend)
+    sso:unprotect <app>                         remove SSO protection
 
-    auth:provider:set <service> <provider>       set directory provider
-    auth:provider:config <service> KEY=value     configure provider settings
-    auth:provider:apply <service>                apply configuration changes
-    auth:providers                               list available providers
+    sso:provider:set <service> <provider>       set directory provider
+    sso:provider:config <service> KEY=value     configure provider settings
+    sso:provider:apply <service>                apply configuration changes
+    sso:providers                               list available providers
 
-dokku auth:frontend commands:
+dokku sso:frontend commands:
 
-    auth:frontend:create <service>               create frontend service
-    auth:frontend:destroy <service> [-f|--force] delete frontend service
-    auth:frontend:list                           list all frontend services
-    auth:frontend:info <service>                 print frontend information
-    auth:frontend:status <service>               show status (exit: 0=up, 1=down)
-    auth:frontend:logs <service> [-t|--tail]     print container logs
+    sso:frontend:create <service>               create frontend service
+    sso:frontend:destroy <service> [-f|--force] delete frontend service
+    sso:frontend:list                           list all frontend services
+    sso:frontend:info <service>                 print frontend information
+    sso:frontend:status <service>               show status (exit: 0=up, 1=down)
+    sso:frontend:logs <service> [-t|--tail]     print container logs
 
-    auth:frontend:use-directory <svc> <dir-svc>  link frontend to directory
-    auth:frontend:protect <service> <app>        add SSO protection to app
-    auth:frontend:unprotect <service> <app>      remove SSO protection
+    sso:frontend:use-directory <svc> <dir-svc>  link frontend to directory
+    sso:frontend:protect <service> <app>        add SSO protection to app
+    sso:frontend:unprotect <service> <app>      remove SSO protection
 
-    auth:frontend:provider:set <service> <prov>  set frontend provider
-    auth:frontend:provider:config <svc> KEY=val  configure provider settings
-    auth:frontend:provider:apply <service>       apply configuration changes
+    sso:frontend:provider:set <service> <prov>  set frontend provider
+    sso:frontend:provider:config <svc> KEY=val  configure provider settings
+    sso:frontend:provider:apply <service>       apply configuration changes
 
-dokku auth:oidc commands:
+dokku sso:oidc commands:
 
-    auth:oidc:enable <service>                   enable OIDC on frontend
-    auth:oidc:disable <service>                  disable OIDC on frontend
-    auth:oidc:add-client <svc> <id> [secret] [uri]  register OIDC client
-    auth:oidc:remove-client <service> <id>       remove OIDC client
-    auth:oidc:list <service>                     list registered clients
+    sso:oidc:enable <service>                   enable OIDC on frontend
+    sso:oidc:disable <service>                  disable OIDC on frontend
+    sso:oidc:add-client <svc> <id> [secret] [uri]  register OIDC client
+    sso:oidc:remove-client <service> <id>       remove OIDC client
+    sso:oidc:list <service>                     list registered clients
 
 Directory providers: lldap (default), glauth, openldap, kanidm
 Frontend providers:  authelia (default), authentik, vouch
@@ -76,11 +76,11 @@ EOF
 }
 
 case "$1" in
-  auth|auth:help)
+  sso|sso:help)
     show_help
     ;;
-  auth:*)
-    subcommand="${1#auth:}"
+  sso:*)
+    subcommand="${1#sso:}"
     shift
 
     # Map subcommands to files (handle nested commands like frontend:create)
@@ -92,8 +92,8 @@ case "$1" in
     if [[ -x "$subcommand_file" ]]; then
       exec "$subcommand_file" "$@"
     else
-      echo "Unknown command: auth:$subcommand" >&2
-      echo "Run 'dokku auth:help' for usage" >&2
+      echo "Unknown command: sso:$subcommand" >&2
+      echo "Run 'dokku sso:help' for usage" >&2
       exit 1
     fi
     ;;

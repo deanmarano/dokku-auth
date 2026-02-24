@@ -29,7 +29,7 @@ async function globalTeardown() {
 
   // Destroy shared service
   console.log('Destroying shared service...');
-  dokku(`auth:destroy ${SHARED_SERVICE} -f`, {
+  dokku(`sso:destroy ${SHARED_SERVICE} -f`, {
     quiet: true,
     prefix: '[teardown] ',
     timeout: 120000,

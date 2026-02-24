@@ -15,7 +15,7 @@ const SERVICE_NAME = process.env.E2E_SERVICE_NAME || 'e2e-shared';
 // Helper to get admin password
 function getAdminPassword(serviceName: string): string {
   try {
-    const output = execSync(`dokku auth:credentials ${serviceName}`, { encoding: 'utf-8' });
+    const output = execSync(`dokku sso:credentials ${serviceName}`, { encoding: 'utf-8' });
     const match = output.match(/ADMIN_PASSWORD=(.+)/);
     return match ? match[1].trim() : '';
   } catch {

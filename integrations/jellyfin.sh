@@ -33,7 +33,7 @@ Jellyfin LDAP Setup Instructions:
 =================================
 
 Jellyfin uses LDAP via a plugin, not OIDC.
-Use 'dokku auth:integrate:jellyfin' for LDAP setup.
+Use 'dokku sso:integrate:jellyfin' for LDAP setup.
 
 EOF
 }
@@ -97,7 +97,7 @@ Jellyfin LDAP Setup Instructions:
    - Try logging in with an LDAP user
 
 4. Create the jellyfin_admin group in LLDAP:
-   dokku auth:groups:create $SERVICE jellyfin_admin
+   dokku sso:groups:create $SERVICE jellyfin_admin
 
 EOF
 }

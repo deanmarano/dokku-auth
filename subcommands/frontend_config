@@ -6,13 +6,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 # Strip command prefix if dokku passed it
-[[ "${1:-}" == auth:* ]] && shift
+[[ "${1:-}" == sso:* ]] && shift
 
 SERVICE="$1"
 shift || true  # Move past service name
 
 if [[ -z "$SERVICE" ]]; then
-  echo "Usage: dokku auth:frontend:config <service> KEY=value [KEY=value ...]" >&2
+  echo "Usage: dokku sso:frontend:config <service> KEY=value [KEY=value ...]" >&2
   exit 1
 fi
 
@@ -84,4 +84,4 @@ for arg in "$@"; do
 done
 
 echo ""
-echo "       Run 'dokku auth:frontend:apply $SERVICE' to apply changes"
+echo "       Run 'dokku sso:frontend:apply $SERVICE' to apply changes"

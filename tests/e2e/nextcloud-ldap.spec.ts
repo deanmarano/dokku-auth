@@ -18,7 +18,7 @@ import {
 /**
  * Nextcloud LDAP Integration E2E Test
  *
- * Tests Nextcloud deployed via library:checkout with Authelia forward auth:
+ * Tests Nextcloud deployed via library:checkout with Authelia forward sso:
  * 1. Deploy Nextcloud as a proper dokku app (with PostgreSQL)
  * 2. Protect it with Authelia forward auth
  * 3. Verify auth redirect and login flow

@@ -45,7 +45,7 @@ Use Authelia forward auth to protect it.
 
 Protect the App:
 ----------------
-dokku auth:protect $APP \\
+dokku sso:protect $APP \\
   --service $SERVICE \\
   --bypass-path "/api/status-page/*" \\
   --bypass-path "/api/badge/*" \\
@@ -62,7 +62,7 @@ Uptime Kuma status pages can be public or protected.
 Configure per-page visibility in the Uptime Kuma UI.
 
 If all status pages should be protected:
-  dokku auth:protect $APP --service $SERVICE
+  dokku sso:protect $APP --service $SERVICE
 
 Socket.IO / WebSocket:
 ----------------------
@@ -79,7 +79,7 @@ Uptime Kuma LDAP Support:
 =========================
 
 Uptime Kuma does not support LDAP authentication.
-Use forward auth (dokku auth:protect) instead.
+Use forward auth (dokku sso:protect) instead.
 
 EOF
 }

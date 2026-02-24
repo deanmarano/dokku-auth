@@ -255,7 +255,7 @@ export async function setupTestUsers(serviceName: string): Promise<{
   // Add users to default group
   try {
     for (const user of createdUsers) {
-      await client.addUserToGroup(user.id, 'dokku-auth-default-users');
+      await client.addUserToGroup(user.id, 'dokku-sso-default-users');
     }
   } catch (e) {
     console.log('Could not add users to default group:', e);

@@ -6,14 +6,14 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 # Strip command prefix if dokku passed it
-[[ "${1:-}" == auth:* ]] && shift
+[[ "${1:-}" == sso:* ]] && shift
 
 
 SERVICE="$1"
 APP="$2"
 
 if [[ -z "$SERVICE" ]] || [[ -z "$APP" ]]; then
-  echo "Usage: dokku auth:link <service> <app>" >&2
+  echo "Usage: dokku sso:link <service> <app>" >&2
   echo "" >&2
   echo "Link an app to a directory service" >&2
   exit 1
@@ -24,7 +24,7 @@ SERVICE_ROOT="$PLUGIN_DATA_ROOT/directory/$SERVICE"
 # Check if service exists
 if ! directory_service_exists "$SERVICE"; then
   echo "!     Service $SERVICE does not exist" >&2
-  echo "       Run: dokku auth:create $SERVICE" >&2
+  echo "       Run: dokku sso:create $SERVICE" >&2
   exit 1
 fi
 
@@ -65,8 +65,8 @@ echo "       LDAP_BASE_DN=${CREDS[LDAP_BASE_DN]}"
 echo "       LDAP_BIND_DN=${CREDS[LDAP_BIND_DN]}"
 echo "       LDAP_BIND_PASSWORD=<hidden>"
 
-# Attach app to auth network
-echo "-----> Attaching $APP to auth network"
+# Attach app to SSO network
+echo "-----> Attaching $APP to SSO network"
 "$DOKKU_BIN" network:set "$APP" attach-post-deploy "$AUTH_NETWORK" < /dev/null 2>/dev/null || true
 
 # Create app-specific group

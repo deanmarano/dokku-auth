@@ -38,7 +38,7 @@ test.describe('GitLab LDAP Integration', () => {
     // 1. Create LLDAP directory service
     console.log('Creating LLDAP directory service...');
     try {
-      dokku(`auth:create ${SERVICE_NAME}`);
+      dokku(`sso:create ${SERVICE_NAME}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -50,8 +50,8 @@ test.describe('GitLab LDAP Integration', () => {
     for (let i = 0; i < 30; i++) {
       try {
         const statusCmd = USE_SUDO
-          ? `sudo dokku auth:status ${SERVICE_NAME}`
-          : `dokku auth:status ${SERVICE_NAME}`;
+          ? `sudo dokku sso:status ${SERVICE_NAME}`
+          : `dokku sso:status ${SERVICE_NAME}`;
         const status = execSync(statusCmd, { encoding: 'utf-8' });
         if (status.includes('healthy')) {
           healthy = true;
@@ -180,9 +180,9 @@ ${ldapConfig}
       }
     }
     try {
-      dokku(`auth:destroy ${SERVICE_NAME} -f`, { quiet: true });
+      dokku(`sso:destroy ${SERVICE_NAME} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 

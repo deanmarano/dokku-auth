@@ -9,10 +9,10 @@ import {
  * Protect / Unprotect E2E Tests
  *
  * Tests:
- * - auth:protect <app>        (auto-detect single frontend)
- * - auth:unprotect <app>      (auto-detect which frontend protects app)
- * - auth:frontend:protect <service> <app>   (explicit frontend)
- * - auth:frontend:unprotect <service> <app> (explicit frontend)
+ * - sso:protect <app>        (auto-detect single frontend)
+ * - sso:unprotect <app>      (auto-detect which frontend protects app)
+ * - sso:frontend:protect <service> <app>   (explicit frontend)
+ * - sso:frontend:unprotect <service> <app> (explicit frontend)
  * - Error cases: no frontend, app not found, idempotency
  */
 
@@ -27,7 +27,7 @@ test.describe('Protect / Unprotect', () => {
 
     // Create directory service
     try {
-      dokku(`auth:create ${DIR_SERVICE}`);
+      dokku(`sso:create ${DIR_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) throw e;
     }
@@ -37,23 +37,23 @@ test.describe('Protect / Unprotect', () => {
 
     // Create frontend service linked to directory
     try {
-      dokku(`auth:frontend:create ${FRONTEND_SERVICE}`);
+      dokku(`sso:frontend:create ${FRONTEND_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) throw e;
     }
 
     try {
-      dokku(`auth:frontend:use-directory ${FRONTEND_SERVICE} ${DIR_SERVICE}`);
+      dokku(`sso:frontend:use-directory ${FRONTEND_SERVICE} ${DIR_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already linked')) {
         console.log('use-directory result:', e.message);
       }
     }
 
-    dokku(`auth:frontend:config ${FRONTEND_SERVICE} DOMAIN=protect-test.local`);
+    dokku(`sso:frontend:config ${FRONTEND_SERVICE} DOMAIN=protect-test.local`);
 
     try {
-      dokku(`auth:frontend:apply ${FRONTEND_SERVICE}`);
+      dokku(`sso:frontend:apply ${FRONTEND_SERVICE}`);
     } catch (e: any) {
       console.log('frontend apply result:', e.message);
     }
@@ -75,106 +75,106 @@ test.describe('Protect / Unprotect', () => {
   test.afterAll(async () => {
     console.log('=== Cleaning up ===');
     for (const app of [TEST_APP, TEST_APP_2]) {
-      try { dokku(`auth:frontend:unprotect ${FRONTEND_SERVICE} ${app}`, { quiet: true }); } catch {}
+      try { dokku(`sso:frontend:unprotect ${FRONTEND_SERVICE} ${app}`, { quiet: true }); } catch {}
       try { dokku(`apps:destroy ${app} --force`, { quiet: true }); } catch {}
     }
-    try { dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true }); } catch {}
-    try { dokku(`auth:destroy ${DIR_SERVICE} -f`, { quiet: true }); } catch {}
+    try { dokku(`sso:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true }); } catch {}
+    try { dokku(`sso:destroy ${DIR_SERVICE} -f`, { quiet: true }); } catch {}
   });
 
-  // --- auth:frontend:protect / auth:frontend:unprotect (explicit service) ---
+  // --- sso:frontend:protect / sso:frontend:unprotect (explicit service) ---
 
-  test('auth:frontend:protect should protect an app', async () => {
-    const output = dokku(`auth:frontend:protect ${FRONTEND_SERVICE} ${TEST_APP}`);
+  test('sso:frontend:protect should protect an app', async () => {
+    const output = dokku(`sso:frontend:protect ${FRONTEND_SERVICE} ${TEST_APP}`);
     expect(output).toContain('Protecting');
     expect(output).toContain('now protected');
   });
 
-  test('auth:frontend:protect should be idempotent', async () => {
-    const output = dokku(`auth:frontend:protect ${FRONTEND_SERVICE} ${TEST_APP}`);
+  test('sso:frontend:protect should be idempotent', async () => {
+    const output = dokku(`sso:frontend:protect ${FRONTEND_SERVICE} ${TEST_APP}`);
     expect(output).toContain('already protected');
   });
 
-  test('auth:frontend:info should show protected app', async () => {
-    const info = dokku(`auth:frontend:info ${FRONTEND_SERVICE}`);
+  test('sso:frontend:info should show protected app', async () => {
+    const info = dokku(`sso:frontend:info ${FRONTEND_SERVICE}`);
     expect(info).toContain(TEST_APP);
   });
 
-  test('auth:frontend:unprotect should remove protection', async () => {
-    const output = dokku(`auth:frontend:unprotect ${FRONTEND_SERVICE} ${TEST_APP}`);
+  test('sso:frontend:unprotect should remove protection', async () => {
+    const output = dokku(`sso:frontend:unprotect ${FRONTEND_SERVICE} ${TEST_APP}`);
     expect(output).toContain('Removing protection');
     expect(output).toContain('removed');
   });
 
-  test('auth:frontend:unprotect on non-protected app should be no-op', async () => {
-    const output = dokku(`auth:frontend:unprotect ${FRONTEND_SERVICE} ${TEST_APP}`);
+  test('sso:frontend:unprotect on non-protected app should be no-op', async () => {
+    const output = dokku(`sso:frontend:unprotect ${FRONTEND_SERVICE} ${TEST_APP}`);
     expect(output).toContain('not protected');
   });
 
-  // --- auth:protect / auth:unprotect (auto-detect) ---
+  // --- sso:protect / sso:unprotect (auto-detect) ---
 
-  test('auth:protect should auto-detect single frontend', async () => {
-    const output = dokku(`auth:protect ${TEST_APP}`);
+  test('sso:protect should auto-detect single frontend', async () => {
+    const output = dokku(`sso:protect ${TEST_APP}`);
     expect(output).toContain('Protecting');
     expect(output).toContain(FRONTEND_SERVICE);
     expect(output).toContain('now protected');
   });
 
-  test('auth:protect should be idempotent', async () => {
-    const output = dokku(`auth:protect ${TEST_APP}`);
+  test('sso:protect should be idempotent', async () => {
+    const output = dokku(`sso:protect ${TEST_APP}`);
     expect(output).toContain('already protected');
   });
 
-  test('auth:unprotect should auto-detect protecting frontend', async () => {
-    const output = dokku(`auth:unprotect ${TEST_APP}`);
+  test('sso:unprotect should auto-detect protecting frontend', async () => {
+    const output = dokku(`sso:unprotect ${TEST_APP}`);
     expect(output).toContain('Removing protection');
     expect(output).toContain(FRONTEND_SERVICE);
     expect(output).toContain('removed');
   });
 
-  test('auth:unprotect on non-protected app should be no-op', async () => {
-    const output = dokku(`auth:unprotect ${TEST_APP}`);
+  test('sso:unprotect on non-protected app should be no-op', async () => {
+    const output = dokku(`sso:unprotect ${TEST_APP}`);
     expect(output).toContain('not protected');
   });
 
   // --- Protect multiple apps ---
 
   test('should protect multiple apps on same frontend', async () => {
-    dokku(`auth:protect ${TEST_APP}`);
-    dokku(`auth:protect ${TEST_APP_2}`);
+    dokku(`sso:protect ${TEST_APP}`);
+    dokku(`sso:protect ${TEST_APP_2}`);
 
-    const info = dokku(`auth:frontend:info ${FRONTEND_SERVICE}`);
+    const info = dokku(`sso:frontend:info ${FRONTEND_SERVICE}`);
     expect(info).toContain(TEST_APP);
     expect(info).toContain(TEST_APP_2);
 
     // Cleanup
-    dokku(`auth:unprotect ${TEST_APP}`);
-    dokku(`auth:unprotect ${TEST_APP_2}`);
+    dokku(`sso:unprotect ${TEST_APP}`);
+    dokku(`sso:unprotect ${TEST_APP_2}`);
   });
 
   // --- Error cases ---
 
-  test('auth:protect should fail for non-existent app', async () => {
+  test('sso:protect should fail for non-existent app', async () => {
     try {
-      dokku(`auth:protect no-such-app-xyz`, { quiet: true });
+      dokku(`sso:protect no-such-app-xyz`, { quiet: true });
       expect(true).toBe(false); // should not reach
     } catch (e: any) {
       expect(e.stderr).toContain('does not exist');
     }
   });
 
-  test('auth:frontend:protect should fail for non-existent frontend', async () => {
+  test('sso:frontend:protect should fail for non-existent frontend', async () => {
     try {
-      dokku(`auth:frontend:protect no-such-frontend ${TEST_APP}`, { quiet: true });
+      dokku(`sso:frontend:protect no-such-frontend ${TEST_APP}`, { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('does not exist');
     }
   });
 
-  test('auth:frontend:protect should fail for non-existent app', async () => {
+  test('sso:frontend:protect should fail for non-existent app', async () => {
     try {
-      dokku(`auth:frontend:protect ${FRONTEND_SERVICE} no-such-app-xyz`, { quiet: true });
+      dokku(`sso:frontend:protect ${FRONTEND_SERVICE} no-such-app-xyz`, { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('does not exist');

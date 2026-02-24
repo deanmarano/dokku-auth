@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { DokkuAuth, createTestApp, destroyTestApp, getAppConfig } from '../helpers/dokku';
+import { DokkuSso, createTestApp, destroyTestApp, getAppConfig } from '../helpers/dokku';
 
 describe('App Linking', () => {
-  let dokku: DokkuAuth;
+  let dokku: DokkuSso;
   let testApp: string;
   const serviceName = `link-svc-${Date.now()}`;
   const appName = `link-app-${Date.now()}`;
 
   beforeAll(async () => {
-    dokku = new DokkuAuth();
+    dokku = new DokkuSso();
     // Clean up any stale resources first
     try { await destroyTestApp(appName); } catch (e: any) {
       console.log('[cleanup] destroyTestApp:', e.message);
@@ -35,7 +35,7 @@ describe('App Linking', () => {
   });
 
   it('should show app in linked apps list', async () => {
-    const result = await dokku.exec(`auth:info ${serviceName}`);
+    const result = await dokku.exec(`sso:info ${serviceName}`);
     expect(result.stdout).toContain('Linked apps:');
     expect(result.stdout).toContain(testApp);
   });

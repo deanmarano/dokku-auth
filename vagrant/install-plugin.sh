@@ -3,8 +3,8 @@ set -euo pipefail
 
 echo "=== Installing Auth Plugin ==="
 
-PLUGIN_DIR="/var/lib/dokku/plugins/available/auth"
-ENABLED_DIR="/var/lib/dokku/plugins/enabled/auth"
+PLUGIN_DIR="/var/lib/dokku/plugins/available/sso"
+ENABLED_DIR="/var/lib/dokku/plugins/enabled/sso"
 
 # Remove old installation if exists
 sudo rm -rf "$PLUGIN_DIR" "$ENABLED_DIR"
@@ -25,7 +25,7 @@ sudo ln -sf "$PLUGIN_DIR" "$ENABLED_DIR"
 sudo dokku plugin:install-dependencies || true
 
 echo "=== Plugin Installed ==="
-dokku help auth 2>/dev/null || echo "Plugin commands will be available after dokku restart"
+dokku help sso 2>/dev/null || echo "Plugin commands will be available after dokku restart"
 
 # Verify subcommands
 echo ""

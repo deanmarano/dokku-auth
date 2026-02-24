@@ -6,14 +6,14 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 # Strip command prefix if dokku passed it
-[[ "${1:-}" == auth:* ]] && shift
+[[ "${1:-}" == sso:* ]] && shift
 
 
 SERVICE="$1"
 APP="$2"
 
 if [[ -z "$SERVICE" ]] || [[ -z "$APP" ]]; then
-  echo "Usage: dokku auth:unlink <service> <app>" >&2
+  echo "Usage: dokku sso:unlink <service> <app>" >&2
   echo "" >&2
   echo "Unlink an app from a directory service" >&2
   exit 1
@@ -52,8 +52,8 @@ if [[ -f "$LINKED_VARS_FILE" ]]; then
   rm -f "$LINKED_VARS_FILE"
 fi
 
-# Detach from auth network
-echo "-----> Detaching $APP from auth network"
+# Detach from SSO network
+echo "-----> Detaching $APP from SSO network"
 "$DOKKU_BIN" network:set "$APP" attach-post-deploy "" < /dev/null 2>/dev/null || true
 
 # Remove from links file

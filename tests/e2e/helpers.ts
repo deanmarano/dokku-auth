@@ -70,7 +70,7 @@ export function dokku(cmd: string, opts?: {
  * Tries Dokku app label first, falls back to legacy container name.
  */
 export function getDirectoryContainerId(serviceName: string): string {
-  const appName = `dokku-auth-dir-${serviceName}`;
+  const appName = `dokku-sso-dir-${serviceName}`;
   try {
     const containerId = execSync(
       `docker ps -q -f "label=com.dokku.app-name=${appName}" -f status=running | head -1`,
@@ -79,7 +79,7 @@ export function getDirectoryContainerId(serviceName: string): string {
     if (containerId) return containerId;
   } catch {}
   // Fall back to legacy container name
-  return `dokku.auth.directory.${serviceName}`;
+  return `dokku.sso.directory.${serviceName}`;
 }
 
 /** Get the first IP address of a Docker container. */
@@ -96,12 +96,12 @@ export function getContainerIp(containerName: string): string {
 }
 
 /**
- * Parse `dokku auth:credentials <service>` output into a key-value map.
+ * Parse `dokku sso:credentials <service>` output into a key-value map.
  *
  * The service name must be passed explicitly so this helper stays stateless.
  */
 export function getLdapCredentials(serviceName: string): Record<string, string> {
-  const output = dokku(`auth:credentials ${serviceName}`);
+  const output = dokku(`sso:credentials ${serviceName}`);
   const creds: Record<string, string> = {};
   for (const line of output.split('\n')) {
     const match = line.match(/^(\w+)=(.+)$/);
@@ -174,7 +174,7 @@ export function createLdapUser(
   console.log(`Created LDAP user: ${userId}`);
 }
 
-/** Poll `auth:status` / `auth:frontend:status` until healthy/running. */
+/** Poll `sso:status` / `sso:frontend:status` until healthy/running. */
 export async function waitForHealthy(
   service: string,
   type: 'directory' | 'frontend',
@@ -183,8 +183,8 @@ export async function waitForHealthy(
   const start = Date.now();
   const cmd =
     type === 'directory'
-      ? `auth:status ${service}`
-      : `auth:frontend:status ${service}`;
+      ? `sso:status ${service}`
+      : `sso:frontend:status ${service}`;
 
   while (Date.now() - start < maxWait) {
     try {
@@ -236,21 +236,21 @@ export interface AuthCredentials {
 }
 
 /**
- * Set up auth directory + frontend services for testing.
+ * Set up SSO directory + frontend services for testing.
  * Returns credentials needed for test user creation and login.
  */
 export function setupAuthServices(
   authService = 'test-auth',
   frontendService = 'test-frontend',
 ): AuthCredentials {
-  dokku(`auth:create ${authService}`, { timeout: 180000, ignoreAlreadyExists: true });
-  dokku(`auth:frontend:create ${frontendService}`, { timeout: 180000, ignoreAlreadyExists: true });
-  dokku(`auth:frontend:use-directory ${frontendService} ${authService}`, {
+  dokku(`sso:create ${authService}`, { timeout: 180000, ignoreAlreadyExists: true });
+  dokku(`sso:frontend:create ${frontendService}`, { timeout: 180000, ignoreAlreadyExists: true });
+  dokku(`sso:frontend:use-directory ${frontendService} ${authService}`, {
     timeout: 60000,
     swallowErrors: true,
   });
 
-  const credentials = dokku(`auth:credentials ${authService}`, { logOutput: false });
+  const credentials = dokku(`sso:credentials ${authService}`, { logOutput: false });
   const ldapUrl =
     credentials.match(/LDAP_URL=(.+)/)?.[1] ?? `ldap://${authService}:3890`;
   const adminPassword =
@@ -259,35 +259,35 @@ export function setupAuthServices(
   return { authService, frontendService, ldapUrl, adminPassword };
 }
 
-/** Tear down auth services completely. */
+/** Tear down SSO services completely. */
 export function teardownAuthServices(
   authService = 'test-auth',
   frontendService = 'test-frontend',
 ): void {
-  dokku(`auth:frontend:destroy ${frontendService} -f`, {
+  dokku(`sso:frontend:destroy ${frontendService} -f`, {
     timeout: 60000,
     swallowErrors: true,
     quiet: true,
   });
-  dokku(`auth:destroy ${authService} -f`, {
+  dokku(`sso:destroy ${authService} -f`, {
     timeout: 60000,
     swallowErrors: true,
     quiet: true,
   });
 }
 
-/** Create a test user in the LDAP directory via the auth plugin. */
+/** Create a test user in the LDAP directory via the sso plugin. */
 export function createLdapTestUser(
   authService: string,
   user: TestUser,
 ): void {
   dokku(
-    `auth:create-user ${authService} ${user.username} ${user.email} ${user.password}`,
+    `sso:create-user ${authService} ${user.username} ${user.email} ${user.password}`,
     { timeout: 30000 },
   );
 }
 
-/** Wait for auth services to become healthy. */
+/** Wait for SSO services to become healthy. */
 export async function waitForAuthHealthy(
   authService = 'test-auth',
   timeout = 120000,
@@ -295,7 +295,7 @@ export async function waitForAuthHealthy(
   const start = Date.now();
   while (Date.now() - start < timeout) {
     try {
-      const result = dokku(`auth:info ${authService}`, { logOutput: false, quiet: true });
+      const result = dokku(`sso:info ${authService}`, { logOutput: false, quiet: true });
       if (result.includes('running') || result.includes('healthy')) {
         return true;
       }

@@ -42,7 +42,7 @@ Vaultwarden LDAP Setup Instructions:
 Vaultwarden requires a separate LDAP sync container (vaultwarden_ldap).
 OIDC is not natively supported.
 
-Use 'dokku auth:protect' for forward auth protection if needed.
+Use 'dokku sso:protect' for forward auth protection if needed.
 
 EOF
 }
@@ -87,7 +87,7 @@ docker run -d --name vaultwarden_ldap \\
 Alternative - Forward Auth:
 ---------------------------
 Use Authelia forward auth to protect the Vaultwarden web vault:
-  dokku auth:protect <vaultwarden-app> --bypass-path "/api/*" --bypass-path "/identity/*"
+  dokku sso:protect <vaultwarden-app> --bypass-path "/api/*" --bypass-path "/identity/*"
 
 This protects web access while allowing client apps to work.
 

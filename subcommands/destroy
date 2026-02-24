@@ -6,7 +6,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 # Strip command prefix if dokku passed it
-[[ "${1:-}" == auth:* ]] && shift
+[[ "${1:-}" == sso:* ]] && shift
 
 
 SERVICE=""
@@ -28,7 +28,7 @@ for arg in "$@"; do
 done
 
 if [[ -z "$SERVICE" ]]; then
-  echo "Usage: dokku auth:destroy <service> [-f|--force] [--keep-app]" >&2
+  echo "Usage: dokku sso:destroy <service> [-f|--force] [--keep-app]" >&2
   echo "" >&2
   echo "Options:" >&2
   echo "  -f, --force  Skip confirmation and force destroy even with linked apps" >&2
@@ -50,7 +50,7 @@ if [[ -s "$SERVICE_ROOT/LINKS" ]] && [[ -z "$FORCE" ]]; then
   sed 's/^/         /' < "$SERVICE_ROOT/LINKS" >&2
   echo "" >&2
   echo "       Use --force to destroy anyway, or unlink apps first:" >&2
-  echo "         dokku auth:unlink $SERVICE <app>" >&2
+  echo "         dokku sso:unlink $SERVICE <app>" >&2
   exit 1
 fi
 

@@ -52,7 +52,7 @@ const TEST_PASSWORD = 'OAuth2Proxy123!';
 const TEST_EMAIL = 'oauth2proxy@test.local';
 
 let AUTHENTIK_INTERNAL_IP: string;
-let AUTH_NETWORK: string;
+let SSO_NETWORK: string;
 let AUTHENTIK_BOOTSTRAP_TOKEN: string;
 
 // Generate self-signed certificates for TLS
@@ -417,7 +417,7 @@ test.describe('Authentik + oauth2-proxy OIDC Browser Flow', () => {
     // 1. Create LLDAP directory service
     console.log('Creating LLDAP directory service...');
     try {
-      dokku(`auth:create ${DIRECTORY_SERVICE}`);
+      dokku(`sso:create ${DIRECTORY_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -430,49 +430,49 @@ test.describe('Authentik + oauth2-proxy OIDC Browser Flow', () => {
     }
 
     // Get auth network
-    AUTH_NETWORK = execSync(
+    SSO_NETWORK = execSync(
       `docker inspect ${getDirectoryContainerId(DIRECTORY_SERVICE)} --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}'`,
       { encoding: 'utf-8' }
     )
       .trim()
       .split('\n')[0];
-    console.log(`Auth network: ${AUTH_NETWORK}`);
+    console.log(`Auth network: ${SSO_NETWORK}`);
 
     // 2. Create Authentik frontend service
     console.log('Creating Authentik frontend service...');
 
     // Force cleanup of any leftover service from previous runs
-    const serviceDir = `/var/lib/dokku/services/auth/frontend/${FRONTEND_SERVICE}`;
+    const serviceDir = `/var/lib/dokku/services/sso/frontend/${FRONTEND_SERVICE}`;
     try {
-      dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true, swallowErrors: true });
+      dokku(`sso:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true, swallowErrors: true });
     } catch {}
     try {
       execSync(`sudo rm -rf ${serviceDir}`, { encoding: 'utf-8', stdio: 'pipe' });
     } catch {}
     for (const suffix of ['', '.worker', '.postgres', '.redis']) {
       try {
-        execSync(`docker rm -f dokku.auth.frontend.${FRONTEND_SERVICE}${suffix}`, {
+        execSync(`docker rm -f dokku.sso.frontend.${FRONTEND_SERVICE}${suffix}`, {
           encoding: 'utf-8',
           stdio: 'pipe',
         });
       } catch {}
     }
 
-    dokku(`auth:frontend:create ${FRONTEND_SERVICE} --provider authentik`);
+    dokku(`sso:frontend:create ${FRONTEND_SERVICE} --provider authentik`);
 
     // Wait for Authentik to be healthy
     console.log('Waiting for Authentik to be ready...');
     const healthy = await waitForHealthy(FRONTEND_SERVICE, 'frontend', 180000);
     if (!healthy) {
       try {
-        const logs = dokku(`auth:frontend:logs ${FRONTEND_SERVICE} -n 50`);
+        const logs = dokku(`sso:frontend:logs ${FRONTEND_SERVICE} -n 50`);
         console.log('Authentik logs:', logs);
       } catch {}
       throw new Error('Authentik not healthy');
     }
 
     // Get Authentik container info
-    const authentikContainerName = `dokku.auth.frontend.${FRONTEND_SERVICE}`;
+    const authentikContainerName = `dokku.sso.frontend.${FRONTEND_SERVICE}`;
     AUTHENTIK_INTERNAL_IP = getContainerIp(authentikContainerName);
     console.log(`Authentik internal IP: ${AUTHENTIK_INTERNAL_IP}`);
 
@@ -541,7 +541,7 @@ http {
 
     execSync(
       `docker run -d --name ${NGINX_CONTAINER} ` +
-        `--network ${AUTH_NETWORK} ` +
+        `--network ${SSO_NETWORK} ` +
         `-p 443:443 ` +
         `-p ${APP_HTTPS_PORT}:${APP_HTTPS_PORT} ` +
         `-v /tmp/ak-oauth2-proxy-nginx.conf:/etc/nginx/nginx.conf:ro ` +
@@ -691,7 +691,7 @@ http {
 
     execSync(
       `docker run -d --name ${BACKEND_CONTAINER} ` +
-        `--network ${AUTH_NETWORK} ` +
+        `--network ${SSO_NETWORK} ` +
         `traefik/whoami:latest`,
       { encoding: 'utf-8' }
     );
@@ -713,7 +713,7 @@ http {
     // because Authentik returns issuer without port in discovery response
     execSync(
       `docker run -d --name ${OAUTH2_PROXY_CONTAINER} ` +
-        `--network ${AUTH_NETWORK} ` +
+        `--network ${SSO_NETWORK} ` +
         `-e OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180 ` +
         `-e OAUTH2_PROXY_PROVIDER=oidc ` +
         `-e OAUTH2_PROXY_OIDC_ISSUER_URL=https://${AUTH_DOMAIN}/application/o/${appSlug}/ ` +
@@ -785,14 +785,14 @@ http {
       execSync(`docker rm -f ${NGINX_CONTAINER}`, { encoding: 'utf-8', stdio: 'pipe' });
     } catch {}
     try {
-      dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true });
+      dokku(`sso:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true });
     } catch (e: any) {
       console.log('[cleanup] frontend:destroy:', e.stderr?.trim() || e.message);
     }
     try {
-      dokku(`auth:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
+      dokku(`sso:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 

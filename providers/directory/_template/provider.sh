@@ -15,7 +15,7 @@ PROVIDER_REQUIRED_CONFIG=""         # Space-separated list of required config ke
 
 # Create and start the container
 # Arguments: SERVICE - name of the service
-# Called by: auth:create, auth:provider:apply
+# Called by: sso:create, sso:provider:apply
 provider_create_container() {
   local SERVICE="$1"
   echo "!     provider_create_container not implemented" >&2

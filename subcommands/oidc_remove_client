@@ -6,14 +6,14 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 # Strip command prefix if dokku passed it
-[[ "${1:-}" == auth:* ]] && shift
+[[ "${1:-}" == sso:* ]] && shift
 
 
 SERVICE="$1"
 CLIENT_ID="$2"
 
 if [[ -z "$SERVICE" ]] || [[ -z "$CLIENT_ID" ]]; then
-  echo "Usage: dokku auth:oidc:remove-client <frontend-service> <client-id>" >&2
+  echo "Usage: dokku sso:oidc:remove-client <frontend-service> <client-id>" >&2
   exit 1
 fi
 
@@ -39,4 +39,4 @@ provider_remove_oidc_client "$SERVICE" "$CLIENT_ID"
 
 echo "-----> Client removed"
 echo ""
-echo "       Run 'dokku auth:frontend:apply $SERVICE' to apply changes"
+echo "       Run 'dokku sso:frontend:apply $SERVICE' to apply changes"

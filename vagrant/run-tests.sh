@@ -46,16 +46,16 @@ case "$TEST_TYPE" in
         SERVICE_NAME="smoke-test-$$"
 
         echo "Creating service..."
-        sudo dokku auth:create "$SERVICE_NAME"
+        sudo dokku sso:create "$SERVICE_NAME"
 
         echo "Checking status..."
-        sudo dokku auth:status "$SERVICE_NAME"
+        sudo dokku sso:status "$SERVICE_NAME"
 
         echo "Getting info..."
-        sudo dokku auth:info "$SERVICE_NAME"
+        sudo dokku sso:info "$SERVICE_NAME"
 
         echo "Destroying service..."
-        sudo dokku auth:destroy "$SERVICE_NAME" --force
+        sudo dokku sso:destroy "$SERVICE_NAME" --force
 
         echo "=== Smoke Test Passed ==="
         ;;

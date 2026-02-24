@@ -34,7 +34,7 @@ const TEST_EMAIL = 'akgrafuser@test.local';
 const GRAFANA_CONTAINER = 'authentik-grafana-ldap-test';
 
 let LDAP_CONTAINER_IP: string;
-let AUTH_NETWORK: string;
+let SSO_NETWORK: string;
 
 test.describe('Authentik + Grafana LDAP Integration', () => {
   test.beforeAll(async () => {
@@ -43,7 +43,7 @@ test.describe('Authentik + Grafana LDAP Integration', () => {
     // 1. Create LLDAP directory service
     console.log('Creating LLDAP directory service...');
     try {
-      dokku(`auth:create ${DIRECTORY_SERVICE}`);
+      dokku(`sso:create ${DIRECTORY_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -60,16 +60,16 @@ test.describe('Authentik + Grafana LDAP Integration', () => {
     console.log(`LLDAP container IP: ${LDAP_CONTAINER_IP}`);
 
     // Determine the auth network
-    AUTH_NETWORK = execSync(
+    SSO_NETWORK = execSync(
       `docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' ${getDirectoryContainerId(DIRECTORY_SERVICE)}`,
       { encoding: 'utf-8' }
     ).trim().split(' ')[0];
-    console.log(`Auth network: ${AUTH_NETWORK}`);
+    console.log(`Auth network: ${SSO_NETWORK}`);
 
     // 2. Create Authentik frontend service
     console.log('Creating Authentik frontend service...');
     try {
-      dokku(`auth:frontend:create ${FRONTEND_SERVICE} --provider authentik`);
+      dokku(`sso:frontend:create ${FRONTEND_SERVICE} --provider authentik`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -81,7 +81,7 @@ test.describe('Authentik + Grafana LDAP Integration', () => {
     const authentikHealthy = await waitForHealthy(FRONTEND_SERVICE, 'frontend', 180000);
     if (!authentikHealthy) {
       try {
-        const logs = dokku(`auth:frontend:logs ${FRONTEND_SERVICE} -n 50`);
+        const logs = dokku(`sso:frontend:logs ${FRONTEND_SERVICE} -n 50`);
         console.log('Authentik logs:', logs);
       } catch {}
       throw new Error('Authentik not healthy');
@@ -123,7 +123,7 @@ name = "cn"
 
     execSync(
       `docker run -d --name ${GRAFANA_CONTAINER} ` +
-        `--network ${AUTH_NETWORK} ` +
+        `--network ${SSO_NETWORK} ` +
         `-v /tmp/authentik-grafana-ldap.toml:/etc/grafana/ldap.toml:ro ` +
         `-e GF_AUTH_LDAP_ENABLED=true ` +
         `-e GF_AUTH_LDAP_CONFIG_FILE=/etc/grafana/ldap.toml ` +
@@ -183,14 +183,14 @@ name = "cn"
       }
     }
     try {
-      dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true });
+      dokku(`sso:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true });
     } catch (e: any) {
       console.log('[cleanup] frontend:destroy:', e.stderr?.trim() || e.message);
     }
     try {
-      dokku(`auth:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
+      dokku(`sso:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 
@@ -204,7 +204,7 @@ name = "cn"
   });
 
   test('Authentik is running alongside LLDAP', async () => {
-    const status = dokku(`auth:frontend:status ${FRONTEND_SERVICE}`);
+    const status = dokku(`sso:frontend:status ${FRONTEND_SERVICE}`);
     expect(status.toLowerCase()).toMatch(/healthy|running/);
   });
 

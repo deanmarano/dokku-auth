@@ -6,15 +6,15 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 # Strip command prefix if dokku passed it
-[[ "${1:-}" == auth:* ]] && shift
+[[ "${1:-}" == sso:* ]] && shift
 
 APP="$1"
 
 if [[ -z "$APP" ]]; then
-  echo "Usage: dokku auth:protect <app>" >&2
+  echo "Usage: dokku sso:protect <app>" >&2
   echo "" >&2
   echo "Add SSO protection to an app (auto-detects frontend service)." >&2
-  echo "If multiple frontend services exist, use auth:frontend:protect <service> <app> instead." >&2
+  echo "If multiple frontend services exist, use sso:frontend:protect <service> <app> instead." >&2
   exit 1
 fi
 
@@ -37,13 +37,13 @@ fi
 
 if [[ ${#SERVICES[@]} -eq 0 ]]; then
   echo "!     No frontend service found" >&2
-  echo "       Create one with: dokku auth:frontend:create <name>" >&2
+  echo "       Create one with: dokku sso:frontend:create <name>" >&2
   exit 1
 fi
 
 if [[ ${#SERVICES[@]} -gt 1 ]]; then
   echo "!     Multiple frontend services found: ${SERVICES[*]}" >&2
-  echo "       Use: dokku auth:frontend:protect <service> <app>" >&2
+  echo "       Use: dokku sso:frontend:protect <service> <app>" >&2
   exit 1
 fi
 

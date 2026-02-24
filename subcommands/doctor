@@ -6,7 +6,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 # Strip command prefix if dokku passed it
-[[ "${1:-}" == auth:* ]] && shift
+[[ "${1:-}" == sso:* ]] && shift
 
 
 SERVICE="$1"
@@ -21,7 +21,7 @@ for arg in "$@"; do
 done
 
 if [[ -z "$SERVICE" ]]; then
-  echo "Usage: dokku auth:doctor <service> [-v|--verbose]" >&2
+  echo "Usage: dokku sso:doctor <service> [-v|--verbose]" >&2
   exit 1
 fi
 
@@ -79,7 +79,7 @@ if [[ -n "$APP_NAME" ]]; then
   fi
 
   # Check 5: Network exists
-  echo -n "       Checking auth network... "
+  echo -n "       Checking SSO network... "
   if docker network ls -q -f "name=^${AUTH_NETWORK}$" | grep -q .; then
     echo "OK"
   else
@@ -88,7 +88,7 @@ if [[ -n "$APP_NAME" ]]; then
     ISSUES=$((ISSUES + 1))
   fi
 
-  # Check 6: App attached to auth network
+  # Check 6: App attached to SSO network
   echo -n "       Checking network attachment... "
   NETWORK_SETTING=$("$DOKKU_BIN" network:report "$APP_NAME" --network-attach-post-deploy < /dev/null 2>/dev/null || echo "")
   if echo "$NETWORK_SETTING" | grep -q "$AUTH_NETWORK"; then
@@ -131,7 +131,7 @@ else
   fi
 
   # Check 5: Network exists
-  echo -n "       Checking auth network... "
+  echo -n "       Checking SSO network... "
   if docker network ls -q -f "name=^${AUTH_NETWORK}$" | grep -q .; then
     echo "OK"
   else

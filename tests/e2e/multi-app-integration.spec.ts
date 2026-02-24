@@ -19,7 +19,7 @@ test.describe('Multiple App LDAP Integration', () => {
     // Create directory service
     console.log('Creating LLDAP directory service...');
     try {
-      dokku(`auth:create ${SERVICE_NAME}`);
+      dokku(`sso:create ${SERVICE_NAME}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -30,7 +30,7 @@ test.describe('Multiple App LDAP Integration', () => {
     let healthy = false;
     for (let i = 0; i < 30; i++) {
       try {
-        const statusCmd = USE_SUDO ? `sudo dokku auth:status ${SERVICE_NAME}` : `dokku auth:status ${SERVICE_NAME}`;
+        const statusCmd = USE_SUDO ? `sudo dokku sso:status ${SERVICE_NAME}` : `dokku sso:status ${SERVICE_NAME}`;
         const status = execSync(statusCmd, { encoding: 'utf-8' });
         if (status.includes('healthy')) {
           healthy = true;
@@ -61,9 +61,9 @@ test.describe('Multiple App LDAP Integration', () => {
     console.log('=== Cleaning up multi-app test environment ===');
     for (const app of TEST_APPS) {
       try {
-        dokku(`auth:unlink ${SERVICE_NAME} ${app}`, { quiet: true });
+        dokku(`sso:unlink ${SERVICE_NAME} ${app}`, { quiet: true });
       } catch (e: any) {
-        console.log(`[cleanup] auth:unlink ${app}:`, e.stderr?.trim() || e.message);
+        console.log(`[cleanup] sso:unlink ${app}:`, e.stderr?.trim() || e.message);
       }
       try {
         dokku(`apps:destroy ${app} --force`, { quiet: true });
@@ -72,15 +72,15 @@ test.describe('Multiple App LDAP Integration', () => {
       }
     }
     try {
-      dokku(`auth:destroy ${SERVICE_NAME} -f`, { quiet: true });
+      dokku(`sso:destroy ${SERVICE_NAME} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 
   test('should link multiple apps to same LLDAP service', async () => {
     for (const app of TEST_APPS) {
-      const linkOutput = dokku(`auth:link ${SERVICE_NAME} ${app}`);
+      const linkOutput = dokku(`sso:link ${SERVICE_NAME} ${app}`);
       expect(linkOutput).toContain('Linking');
       expect(linkOutput).toContain('LDAP_URL');
     }
@@ -97,7 +97,7 @@ test.describe('Multiple App LDAP Integration', () => {
   });
 
   test('service info should show all linked apps', async () => {
-    const info = dokku(`auth:info ${SERVICE_NAME}`);
+    const info = dokku(`sso:info ${SERVICE_NAME}`);
     for (const app of TEST_APPS) {
       expect(info).toContain(app);
     }
@@ -108,7 +108,7 @@ test.describe('Multiple App LDAP Integration', () => {
     const baseDn = creds.BASE_DN || creds.LDAP_BASE_DN;
 
     // Groups are created when linking - verify via info command
-    const info = dokku(`auth:info ${SERVICE_NAME}`);
+    const info = dokku(`sso:info ${SERVICE_NAME}`);
     expect(info).toContain('Linked apps');
 
     // Both apps should be in the linked apps list
@@ -119,7 +119,7 @@ test.describe('Multiple App LDAP Integration', () => {
 
   test('should unlink apps independently', async () => {
     // Unlink first app
-    const unlinkOutput = dokku(`auth:unlink ${SERVICE_NAME} ${TEST_APPS[0]}`);
+    const unlinkOutput = dokku(`sso:unlink ${SERVICE_NAME} ${TEST_APPS[0]}`);
     expect(unlinkOutput).toContain('Unlinking');
 
     // First app should not have LDAP vars
@@ -131,16 +131,16 @@ test.describe('Multiple App LDAP Integration', () => {
     expect(config2).toContain('LDAP_URL');
 
     // Service should only show second app
-    const info = dokku(`auth:info ${SERVICE_NAME}`);
+    const info = dokku(`sso:info ${SERVICE_NAME}`);
     expect(info).not.toContain(TEST_APPS[0]);
     expect(info).toContain(TEST_APPS[1]);
 
     // Re-link first app for cleanup
-    dokku(`auth:link ${SERVICE_NAME} ${TEST_APPS[0]}`);
+    dokku(`sso:link ${SERVICE_NAME} ${TEST_APPS[0]}`);
   });
 
   test('should list directory services', async () => {
-    const list = dokku('auth:list');
+    const list = dokku('sso:list');
     expect(list).toContain(SERVICE_NAME);
     expect(list).toContain('lldap');
   });

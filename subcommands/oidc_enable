@@ -6,13 +6,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 source "$PLUGIN_BASE_PATH/providers/loader.sh"
 
 # Strip command prefix if dokku passed it
-[[ "${1:-}" == auth:* ]] && shift
+[[ "${1:-}" == sso:* ]] && shift
 
 
 SERVICE="$1"
 
 if [[ -z "$SERVICE" ]]; then
-  echo "Usage: dokku auth:oidc:enable <frontend-service>" >&2
+  echo "Usage: dokku sso:oidc:enable <frontend-service>" >&2
   exit 1
 fi
 
@@ -37,6 +37,6 @@ provider_enable_oidc "$SERVICE"
 
 echo "-----> OIDC enabled"
 echo ""
-echo "       Run 'dokku auth:frontend:apply $SERVICE' or 'dokku auth:frontend:provider:apply $SERVICE' to apply changes"
+echo "       Run 'dokku sso:frontend:apply $SERVICE' or 'dokku sso:frontend:provider:apply $SERVICE' to apply changes"
 echo ""
-echo "       Add clients with: dokku auth:oidc:add-client $SERVICE <client-id> <client-secret> <redirect-uri>"
+echo "       Add clients with: dokku sso:oidc:add-client $SERVICE <client-id> <client-secret> <redirect-uri>"

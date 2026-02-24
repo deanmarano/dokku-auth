@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { DokkuAuth } from '../helpers/dokku';
+import { DokkuSso } from '../helpers/dokku';
 import { LDAPClient } from '../helpers/ldap';
 
 describe('LLDAP Directory Provider', () => {
-  let dokku: DokkuAuth;
+  let dokku: DokkuSso;
 
   beforeAll(() => {
-    dokku = new DokkuAuth();
+    dokku = new DokkuSso();
   });
 
   afterAll(async () => {
@@ -53,7 +53,7 @@ describe('LLDAP Directory Provider', () => {
 
       // Get container IP since hostname may not resolve from test runner
       // For Dokku apps, find the container by label; for legacy, use the old naming convention
-      const appName = `dokku-auth-dir-${serviceName}`;
+      const appName = `dokku-sso-dir-${serviceName}`;
       const { execSync } = await import('child_process');
       let containerIp: string;
       try {
@@ -70,7 +70,7 @@ describe('LLDAP Directory Provider', () => {
           containerIp = ips.split(' ')[0];
         } else {
           // Fall back to legacy container name
-          const containerName = `dokku.auth.directory.${serviceName}`;
+          const containerName = `dokku.sso.directory.${serviceName}`;
           const ips = execSync(
             `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' ${containerName}`,
             { encoding: 'utf-8' }
@@ -102,7 +102,7 @@ describe('LLDAP Directory Provider', () => {
     });
 
     it('should have default users group', async () => {
-      const members = await ldapClient.getGroupMembers('dokku-auth-default-users');
+      const members = await ldapClient.getGroupMembers('dokku-sso-default-users');
       // Group exists (may or may not have members yet)
       expect(Array.isArray(members)).toBe(true);
     });

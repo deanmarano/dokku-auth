@@ -478,7 +478,7 @@ provider_protect_app() {
   local NGINX_CONF_DIR="$DOKKU_ROOT/$APP/nginx.conf.d"
   mkdir -p "$NGINX_CONF_DIR"
   cat > "$NGINX_CONF_DIR/forward-auth.conf" <<EOF
-# Authelia forward auth - managed by dokku-auth plugin
+# Authelia forward auth - managed by dokku-sso plugin
 # Server-level locations
 location /authelia-auth {
     internal;

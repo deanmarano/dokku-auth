@@ -20,7 +20,7 @@ jobs:
       unit-tests: ${{ steps.filter.outputs.unit-tests }}
       integration-tests: ${{ steps.filter.outputs.integration-tests }}
       # Provider-specific changes
-      glauth: ${{ steps.filter.outputs.glauth }}
+      glsso: ${{ steps.filter.outputs.glauth }}
       openldap: ${{ steps.filter.outputs.openldap }}
       authentik: ${{ steps.filter.outputs.authentik }}
       # OIDC subsystem changes
@@ -75,7 +75,7 @@ jobs:
               - 'tests/integration/**'
 
             # Alternative directory providers
-            glauth:
+            glsso:
               - 'providers/directory/glauth/**'
               - 'tests/e2e/glauth.spec.ts'
 
@@ -213,14 +213,14 @@ jobs:
 
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
           # Create plugin data directory
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
-          sudo dokku auth:help
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
+          sudo dokku sso:help
 
       - name: Run integration tests
         run: npm run test:integration
@@ -236,7 +236,7 @@ jobs:
           echo "=== Docker containers ==="
           docker ps -a
           echo "=== Auth services ==="
-          sudo dokku auth:list 2>/dev/null || true
+          sudo dokku sso:list 2>/dev/null || true
 
   # E2E Tests - each job runs only when its specific codepath changes
   # Common condition: push to main/trunk AND (core changed OR e2e-shared changed OR specific files changed)
@@ -266,12 +266,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Run LDAP linking tests
         run: npx playwright test --project=ldap-linking
         env:
@@ -288,7 +288,7 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
 
   e2e-nextcloud:
     name: E2E - Nextcloud LDAP
@@ -315,12 +315,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Install dokku-library plugin
         run: |
           sudo dokku plugin:install https://github.com/deanmarano/dokkufile.git dokkufile || true
@@ -341,7 +341,7 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
 
   e2e-multi-app:
     name: E2E - Multi-App Integration
@@ -368,12 +368,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Run Multi-app integration tests
         run: npx playwright test --project=multi-app-integration
         env:
@@ -390,7 +390,7 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
 
   e2e-oidc-app:
     name: E2E - OIDC Application
@@ -417,12 +417,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Setup /etc/hosts for OIDC testing
         run: |
           echo "127.0.0.1 auth.test.local" | sudo tee -a /etc/hosts
@@ -443,9 +443,9 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
           echo "=== oauth2-proxy logs ===" && docker logs oauth2-proxy-test 2>&1 || true
-          echo "=== Authelia logs ===" && sudo dokku auth:frontend:logs oidc-app-frontend-test -n 100 2>/dev/null || true
+          echo "=== Authelia logs ===" && sudo dokku sso:frontend:logs oidc-app-frontend-test -n 100 2>/dev/null || true
 
   e2e-grafana-ldap:
     name: E2E - Grafana LDAP
@@ -472,12 +472,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Install dokku-library plugin
         run: |
           sudo dokku plugin:install https://github.com/deanmarano/dokkufile.git dokkufile || true
@@ -498,7 +498,7 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
           echo "=== Grafana logs ===" && docker logs grafana-ldap-test 2>&1 || true
 
   e2e-grafana-oidc:
@@ -526,12 +526,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Install dokku-library plugin
         run: |
           sudo dokku plugin:install https://github.com/deanmarano/dokkufile.git dokkufile || true
@@ -556,10 +556,10 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
           echo "=== Grafana logs ===" && docker logs grafana-oidc-test 2>&1 || true
           echo "=== nginx logs ===" && docker logs nginx-grafana-oidc-proxy 2>&1 || true
-          echo "=== Authelia logs ===" && sudo dokku auth:frontend:logs grafana-oidc-fe-test -n 100 2>/dev/null || true
+          echo "=== Authelia logs ===" && sudo dokku sso:frontend:logs grafana-oidc-fe-test -n 100 2>/dev/null || true
 
   e2e-gitlab-ldap:
     name: E2E - GitLab LDAP
@@ -586,12 +586,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Run GitLab LDAP tests
         run: npx playwright test --project=gitlab-ldap
         timeout-minutes: 20
@@ -609,10 +609,10 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
           echo "=== GitLab logs ===" && docker logs gitlab-ldap-test 2>&1 | tail -100 || true
 
-  e2e-glauth:
+  e2e-glsso:
     name: E2E - GLAuth Provider
     runs-on: ubuntu-24.04
     needs: changes
@@ -637,12 +637,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Run GLAuth tests
         run: npx playwright test --project=glauth
         env:
@@ -659,8 +659,8 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
-          echo "=== GLAuth logs ===" && sudo dokku auth:logs glauth-e2e-test -n 100 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
+          echo "=== GLAuth logs ===" && sudo dokku sso:logs glauth-e2e-test -n 100 2>/dev/null || true
 
   e2e-openldap:
     name: E2E - OpenLDAP Provider
@@ -687,12 +687,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Run OpenLDAP tests
         run: npx playwright test --project=openldap
         env:
@@ -709,8 +709,8 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
-          echo "=== OpenLDAP logs ===" && sudo dokku auth:logs openldap-e2e-test -n 100 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
+          echo "=== OpenLDAP logs ===" && sudo dokku sso:logs openldap-e2e-test -n 100 2>/dev/null || true
 
   e2e-authentik:
     name: E2E - Authentik Provider
@@ -737,12 +737,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Run Authentik tests
         run: npx playwright test --project=authentik
         env:
@@ -759,10 +759,10 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
-          sudo dokku auth:frontend:list 2>/dev/null || true
-          echo "=== Authentik server logs ===" && docker logs dokku.auth.frontend.authentik-e2e-test 2>&1 | tail -100 || true
-          echo "=== Authentik worker logs ===" && docker logs dokku.auth.frontend.authentik-e2e-test.worker 2>&1 | tail -100 || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
+          sudo dokku sso:frontend:list 2>/dev/null || true
+          echo "=== Authentik server logs ===" && docker logs dokku.sso.frontend.authentik-e2e-test 2>&1 | tail -100 || true
+          echo "=== Authentik worker logs ===" && docker logs dokku.sso.frontend.authentik-e2e-test.worker 2>&1 | tail -100 || true
 
   e2e-authentik-grafana-ldap:
     name: E2E - Authentik + Grafana LDAP
@@ -789,12 +789,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Run Authentik + Grafana LDAP tests
         run: npx playwright test --project=authentik-grafana-ldap
         env:
@@ -811,9 +811,9 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
-          sudo dokku auth:frontend:list 2>/dev/null || true
-          echo "=== Authentik logs ===" && docker logs dokku.auth.frontend.ak-graf-ldap-fe 2>&1 | tail -100 || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
+          sudo dokku sso:frontend:list 2>/dev/null || true
+          echo "=== Authentik logs ===" && docker logs dokku.sso.frontend.ak-graf-ldap-fe 2>&1 | tail -100 || true
           echo "=== Grafana logs ===" && docker logs authentik-grafana-ldap-test 2>&1 | tail -100 || true
 
   e2e-authentik-grafana-oidc:
@@ -841,12 +841,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Setup /etc/hosts for OIDC testing
         run: |
           echo "127.0.0.1 authentik-grafana.test.local" | sudo tee -a /etc/hosts
@@ -867,13 +867,13 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
-          sudo dokku auth:frontend:list 2>/dev/null || true
-          echo "=== Authentik server logs ===" && docker logs dokku.auth.frontend.ak-graf-oidc-fe 2>&1 | tail -100 || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
+          sudo dokku sso:frontend:list 2>/dev/null || true
+          echo "=== Authentik server logs ===" && docker logs dokku.sso.frontend.ak-graf-oidc-fe 2>&1 | tail -100 || true
           echo "=== Grafana logs ===" && docker logs grafana-authentik-oidc-test 2>&1 | tail -100 || true
           echo "=== nginx logs ===" && docker logs nginx-authentik-grafana-proxy 2>&1 | tail -100 || true
 
-  e2e-radarr-forward-auth:
+  e2e-radarr-forward-sso:
     name: E2E - Radarr Forward Auth
     runs-on: ubuntu-24.04
     needs: changes
@@ -898,12 +898,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Install dokku-library plugin
         run: |
           sudo dokku plugin:install https://github.com/deanmarano/dokkufile.git dokkufile || true
@@ -928,11 +928,11 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
-          sudo dokku auth:frontend:list 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
+          sudo dokku sso:frontend:list 2>/dev/null || true
           echo "=== Radarr logs ===" && docker logs radarr-test 2>&1 | tail -100 || true
           echo "=== nginx logs ===" && docker logs nginx-radarr-proxy 2>&1 | tail -100 || true
-          echo "=== Authelia logs ===" && sudo dokku auth:frontend:logs radarr-auth-fe -n 100 2>/dev/null || true
+          echo "=== Authelia logs ===" && sudo dokku sso:frontend:logs radarr-auth-fe -n 100 2>/dev/null || true
 
   e2e-jellyfin-ldap:
     name: E2E - Jellyfin LDAP
@@ -959,12 +959,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Install dokku-library plugin
         run: |
           sudo dokku plugin:install https://github.com/deanmarano/dokkufile.git dokkufile || true
@@ -985,7 +985,7 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
           echo "=== Jellyfin logs ===" && docker logs jellyfin-ldap-test 2>&1 | tail -100 || true
           echo "=== LDAP config ===" && cat /tmp/jellyfin-config/plugins/configurations/LDAP-Auth.xml 2>/dev/null || true
 
@@ -1014,12 +1014,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Install dokku-library plugin
         run: |
           sudo dokku plugin:install https://github.com/deanmarano/dokkufile.git dokkufile || true
@@ -1044,7 +1044,7 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
           echo "=== Immich server logs ===" && docker logs immich-server-test 2>&1 | tail -100 || true
           echo "=== PostgreSQL logs ===" && docker logs immich-postgres-test 2>&1 | tail -50 || true
           echo "=== Redis logs ===" && docker logs immich-redis-test 2>&1 | tail -20 || true
@@ -1075,12 +1075,12 @@ jobs:
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
       - name: Install plugin
         run: |
-          sudo mkdir -p /var/lib/dokku/plugins/available/auth
-          sudo cp -r ./* /var/lib/dokku/plugins/available/auth/
-          sudo ln -sf /var/lib/dokku/plugins/available/auth /var/lib/dokku/plugins/enabled/auth
-          sudo mkdir -p /var/lib/dokku/services/auth
-          sudo chown -R dokku:dokku /var/lib/dokku/services/auth
-          sudo dokku plugin:install-dependencies auth || true
+          sudo mkdir -p /var/lib/dokku/plugins/available/sso
+          sudo cp -r ./* /var/lib/dokku/plugins/available/sso/
+          sudo ln -sf /var/lib/dokku/plugins/available/sso /var/lib/dokku/plugins/enabled/sso
+          sudo mkdir -p /var/lib/dokku/services/sso
+          sudo chown -R dokku:dokku /var/lib/dokku/services/sso
+          sudo dokku plugin:install-dependencies sso || true
       - name: Setup /etc/hosts for OIDC test domains
         run: |
           echo "127.0.0.1 ak-oauth2-auth.test.local" | sudo tee -a /etc/hosts
@@ -1101,8 +1101,8 @@ jobs:
         if: failure()
         run: |
           echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku auth:list 2>/dev/null || true
-          sudo dokku auth:frontend:list 2>/dev/null || true
-          echo "=== Authentik logs ===" && docker logs dokku.auth.frontend.ak-oauth2-fe 2>&1 | tail -100 || true
+          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
+          sudo dokku sso:frontend:list 2>/dev/null || true
+          echo "=== Authentik logs ===" && docker logs dokku.sso.frontend.ak-oauth2-fe 2>&1 | tail -100 || true
           echo "=== oauth2-proxy logs ===" && docker logs authentik-oauth2-proxy-test 2>&1 | tail -100 || true
           echo "=== nginx logs ===" && docker logs nginx-ak-oauth2-proxy 2>&1 | tail -50 || true

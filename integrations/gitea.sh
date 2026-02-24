@@ -62,7 +62,7 @@ Option 1: Via Admin UI
 Option 2: Via CLI (gitea admin auth)
 ------------------------------------
 dokku enter $APP web gitea admin auth add-oauth \\
-  --name authelia \\
+  --name ssoelia \\
   --provider openidConnect \\
   --key "$CLIENT_ID" \\
   --secret "<client_secret>" \\

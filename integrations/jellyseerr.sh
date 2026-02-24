@@ -51,7 +51,7 @@ OIDC configuration is identical to Overseerr.
    - Enable OIDC: checked
    - OIDC Name: Authelia (or your preferred name)
    - OIDC Client ID: $CLIENT_ID
-   - OIDC Client Secret: <from dokku auth:oidc:show $SERVICE $CLIENT_ID>
+   - OIDC Client Secret: <from dokku sso:oidc:show $SERVICE $CLIENT_ID>
    - OIDC Authorization URL: https://${AUTH_DOMAIN}/api/oidc/authorization
    - OIDC Token URL: https://${AUTH_DOMAIN}/api/oidc/token
    - OIDC Userinfo URL: https://${AUTH_DOMAIN}/api/oidc/userinfo
@@ -61,7 +61,7 @@ OIDC configuration is identical to Overseerr.
 
 Optional - Forward Auth (additional protection):
 ------------------------------------------------
-dokku auth:protect $APP \\
+dokku sso:protect $APP \\
   --service $SERVICE \\
   --bypass-path "/api/v1/auth/*" \\
   --bypass-path "/api/v1/status"
@@ -84,7 +84,7 @@ Jellyseerr LDAP Support:
 Jellyseerr does not support LDAP directly.
 Use OIDC authentication instead (supported!).
 
-dokku auth:oidc:add <service> jellyseerr --preset jellyseerr --domain <domain>
+dokku sso:oidc:add <service> jellyseerr --preset jellyseerr --domain <domain>
 
 EOF
 }

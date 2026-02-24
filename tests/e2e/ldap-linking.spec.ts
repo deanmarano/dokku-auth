@@ -32,7 +32,7 @@ test.describe('App LDAP Integration', () => {
     // 1. Create directory service
     console.log('Creating LLDAP directory service...');
     try {
-      dokku(`auth:create ${SERVICE_NAME}`);
+      dokku(`sso:create ${SERVICE_NAME}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -44,7 +44,7 @@ test.describe('App LDAP Integration', () => {
     let healthy = false;
     for (let i = 0; i < 30; i++) {
       try {
-        const statusCmd = USE_SUDO ? `sudo dokku auth:status ${SERVICE_NAME}` : `dokku auth:status ${SERVICE_NAME}`;
+        const statusCmd = USE_SUDO ? `sudo dokku sso:status ${SERVICE_NAME}` : `dokku sso:status ${SERVICE_NAME}`;
         const status = execSync(statusCmd, { encoding: 'utf-8' });
         if (status.includes('healthy')) {
           healthy = true;
@@ -78,9 +78,9 @@ test.describe('App LDAP Integration', () => {
   test.afterAll(async () => {
     console.log('=== Cleaning up test environment ===');
     try {
-      dokku(`auth:unlink ${SERVICE_NAME} ${TEST_APP}`, { quiet: true });
+      dokku(`sso:unlink ${SERVICE_NAME} ${TEST_APP}`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:unlink:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:unlink:', e.stderr?.trim() || e.message);
     }
     try {
       dokku(`apps:destroy ${TEST_APP} --force`, { quiet: true });
@@ -88,14 +88,14 @@ test.describe('App LDAP Integration', () => {
       console.log('[cleanup] apps:destroy:', e.stderr?.trim() || e.message);
     }
     try {
-      dokku(`auth:destroy ${SERVICE_NAME} -f`, { quiet: true });
+      dokku(`sso:destroy ${SERVICE_NAME} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 
   test('LLDAP service should be healthy', async () => {
-    const statusCmd = USE_SUDO ? `sudo dokku auth:status ${SERVICE_NAME}` : `dokku auth:status ${SERVICE_NAME}`;
+    const statusCmd = USE_SUDO ? `sudo dokku sso:status ${SERVICE_NAME}` : `dokku sso:status ${SERVICE_NAME}`;
     const status = execSync(statusCmd, { encoding: 'utf-8' });
     expect(status).toContain('healthy');
   });
@@ -110,7 +110,7 @@ test.describe('App LDAP Integration', () => {
 
   test('should link app to LLDAP service', async () => {
     // Link the app
-    const linkOutput = dokku(`auth:link ${SERVICE_NAME} ${TEST_APP}`);
+    const linkOutput = dokku(`sso:link ${SERVICE_NAME} ${TEST_APP}`);
 
     expect(linkOutput).toContain('Linking');
     expect(linkOutput).toContain('LDAP_URL');
@@ -128,7 +128,7 @@ test.describe('App LDAP Integration', () => {
   });
 
   test('should show app in service info linked apps', async () => {
-    const info = dokku(`auth:info ${SERVICE_NAME}`);
+    const info = dokku(`sso:info ${SERVICE_NAME}`);
 
     expect(info).toContain(TEST_APP);
     expect(info).toContain('Linked apps');
@@ -141,12 +141,12 @@ test.describe('App LDAP Integration', () => {
 
     // The linking process creates a group named <app>_users
     // This is visible in the link output
-    const info = dokku(`auth:info ${SERVICE_NAME}`);
+    const info = dokku(`sso:info ${SERVICE_NAME}`);
     expect(info).toContain(TEST_APP);
   });
 
   test('should unlink app from service', async () => {
-    const unlinkOutput = dokku(`auth:unlink ${SERVICE_NAME} ${TEST_APP}`);
+    const unlinkOutput = dokku(`sso:unlink ${SERVICE_NAME} ${TEST_APP}`);
 
     expect(unlinkOutput).toContain('Unlinking');
 

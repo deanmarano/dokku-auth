@@ -17,14 +17,14 @@ import {
 /**
  * Radarr Forward Auth E2E Test
  *
- * Tests Radarr deployed via library:checkout with Authelia forward auth:
+ * Tests Radarr deployed via library:checkout with Authelia forward sso:
  * 1. Deploy Radarr as a proper dokku app
- * 2. Protect it with Authelia forward auth (via auth:protect)
+ * 2. Protect it with Authelia forward auth (via sso:protect)
  * 3. Verify unauthenticated requests redirect to Authelia
  * 4. Verify authenticated users can access Radarr
  *
  * Note: Radarr doesn't support native OIDC/LDAP, so forward auth is the
- * correct approach. library:checkout + auth:protect handles all nginx config.
+ * correct approach. library:checkout + sso:protect handles all nginx config.
  */
 
 const APP = 'test-radarr-auth';

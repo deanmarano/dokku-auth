@@ -45,7 +45,7 @@ Use Authelia forward auth to protect it.
 
 Protect the App:
 ----------------
-dokku auth:protect $APP \\
+dokku sso:protect $APP \\
   --service $SERVICE \\
   --bypass-path "/api/*" \\
   --bypass-path "/feed/*"
@@ -84,7 +84,7 @@ Sonarr LDAP Support:
 ====================
 
 Sonarr does not support LDAP authentication.
-Use forward auth (dokku auth:protect) instead.
+Use forward auth (dokku sso:protect) instead.
 
 EOF
 }

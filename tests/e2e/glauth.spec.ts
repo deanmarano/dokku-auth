@@ -21,7 +21,7 @@ test.describe('GLAuth Directory Provider', () => {
     // Create GLAuth directory service
     console.log('Creating GLAuth directory service...');
     try {
-      dokku(`auth:create ${SERVICE_NAME} --provider glauth`);
+      dokku(`sso:create ${SERVICE_NAME} --provider glauth`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -40,19 +40,19 @@ test.describe('GLAuth Directory Provider', () => {
   test.afterAll(async () => {
     console.log('=== Cleaning up GLAuth test ===');
     try {
-      dokku(`auth:destroy ${SERVICE_NAME} -f`, { quiet: true });
+      dokku(`sso:destroy ${SERVICE_NAME} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 
   test('service status shows healthy', async () => {
-    const status = dokku(`auth:status ${SERVICE_NAME}`);
+    const status = dokku(`sso:status ${SERVICE_NAME}`);
     expect(status).toContain('healthy');
   });
 
   test('service info shows GLAuth provider', async () => {
-    const info = dokku(`auth:info ${SERVICE_NAME}`);
+    const info = dokku(`sso:info ${SERVICE_NAME}`);
     expect(info.toLowerCase()).toContain('glauth');
   });
 
@@ -85,7 +85,7 @@ test.describe('GLAuth Directory Provider', () => {
   });
 
   test('doctor check passes', async () => {
-    const result = dokku(`auth:doctor ${SERVICE_NAME}`);
+    const result = dokku(`sso:doctor ${SERVICE_NAME}`);
     // Doctor should not report errors
     expect(result.toLowerCase()).not.toContain('error');
   });

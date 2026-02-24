@@ -58,7 +58,7 @@ RUN chmod +x /usr/local/bin/setup-dokku-ssh
 COPY <<'EOF' /usr/local/bin/dokku
 #!/bin/bash
 # Find the dokku container dynamically
-CONTAINER=$(docker ps --format '{{.Names}}' | grep -E '^(dokku-auth[-_]dokku[-_]1|dokku[-_]dokku[-_]1|dokku)$' | head -1)
+CONTAINER=$(docker ps --format '{{.Names}}' | grep -E '^(dokku-sso[-_]dokku[-_]1|dokku[-_]dokku[-_]1|dokku)$' | head -1)
 if [ -z "$CONTAINER" ]; then
     echo "Error: Could not find dokku container" >&2
     docker ps --format '{{.Names}}' >&2

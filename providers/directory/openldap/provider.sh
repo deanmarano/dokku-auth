@@ -40,7 +40,7 @@ provider_create_container() {
   local APP_NAME
   APP_NAME=$(get_directory_app_name "$SERVICE")
   if [[ -z "$APP_NAME" ]]; then
-    APP_NAME="dokku-auth-dir-$SERVICE"
+    APP_NAME="dokku-sso-dir-$SERVICE"
     echo "$APP_NAME" > "$SERVICE_ROOT/APP_NAME"
   fi
 
@@ -79,9 +79,9 @@ provider_create_container() {
     LDAP_TLS="false" \
     TZ="${TZ:-UTC}" < /dev/null
 
-  # Attach to auth network
-  echo "-----> Attaching to network $AUTH_NETWORK"
-  "$DOKKU_BIN" network:set "$APP_NAME" attach-post-deploy "$AUTH_NETWORK" < /dev/null
+  # Attach to SSO network
+  echo "-----> Attaching to network $SSO_NETWORK"
+  "$DOKKU_BIN" network:set "$APP_NAME" attach-post-deploy "$SSO_NETWORK" < /dev/null
 
   # Deploy from image
   echo "-----> Deploying $PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
@@ -159,8 +159,8 @@ provider_adopt_app() {
   # Store app name
   echo "$APP_NAME" > "$SERVICE_ROOT/APP_NAME"
 
-  # Attach to auth network
-  "$DOKKU_BIN" network:set "$APP_NAME" attach-post-deploy "$AUTH_NETWORK" < /dev/null
+  # Attach to SSO network
+  "$DOKKU_BIN" network:set "$APP_NAME" attach-post-deploy "$SSO_NETWORK" < /dev/null
 
   # Check if it's running
   if provider_is_running "$SERVICE"; then

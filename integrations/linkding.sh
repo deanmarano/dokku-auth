@@ -53,7 +53,7 @@ Linkding Setup Instructions:
 Environment variables have been configured (if --set-env was used).
 
 1. Protect with Authelia:
-   dokku auth:protect $APP \\
+   dokku sso:protect $APP \\
      --service $SERVICE \\
      --bypass-path "/api/*" \\
      --bypass-path "/feeds/*"

@@ -80,13 +80,13 @@ frontend_service_exists() {
 # Get the container name for a directory service
 get_directory_container_name() {
   local SERVICE="$1"
-  echo "dokku.auth.directory.$SERVICE"
+  echo "dokku.sso.directory.$SERVICE"
 }
 
 # Get the container name for a frontend service
 get_frontend_container_name() {
   local SERVICE="$1"
-  echo "dokku.auth.frontend.$SERVICE"
+  echo "dokku.sso.frontend.$SERVICE"
 }
 
 # Get the Dokku app name for a directory service

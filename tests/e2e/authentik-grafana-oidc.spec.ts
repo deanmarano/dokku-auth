@@ -50,7 +50,7 @@ const TEST_PASSWORD = 'GrafanaOidc123!';
 const TEST_EMAIL = 'grafanaoidc@test.local';
 
 let AUTHENTIK_INTERNAL_IP: string;
-let AUTH_NETWORK: string;
+let SSO_NETWORK: string;
 let AUTHENTIK_BOOTSTRAP_TOKEN: string;
 
 // Generate self-signed certificates for TLS
@@ -377,7 +377,7 @@ test.describe('Authentik + Grafana OIDC Browser Flow', () => {
     // 1. Create LLDAP directory service
     console.log('Creating LLDAP directory service...');
     try {
-      dokku(`auth:create ${DIRECTORY_SERVICE}`);
+      dokku(`sso:create ${DIRECTORY_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -390,49 +390,49 @@ test.describe('Authentik + Grafana OIDC Browser Flow', () => {
     }
 
     // Get auth network
-    AUTH_NETWORK = execSync(
+    SSO_NETWORK = execSync(
       `docker inspect ${getDirectoryContainerId(DIRECTORY_SERVICE)} --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}'`,
       { encoding: 'utf-8' }
     )
       .trim()
       .split('\n')[0];
-    console.log(`Auth network: ${AUTH_NETWORK}`);
+    console.log(`Auth network: ${SSO_NETWORK}`);
 
     // 2. Create Authentik frontend service
     console.log('Creating Authentik frontend service...');
 
     // Force cleanup of any leftover service from previous runs
-    const serviceDir = `/var/lib/dokku/services/auth/frontend/${FRONTEND_SERVICE}`;
+    const serviceDir = `/var/lib/dokku/services/sso/frontend/${FRONTEND_SERVICE}`;
     try {
-      dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true, swallowErrors: true });
+      dokku(`sso:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true, swallowErrors: true });
     } catch {}
     try {
       execSync(`sudo rm -rf ${serviceDir}`, { encoding: 'utf-8', stdio: 'pipe' });
     } catch {}
     for (const suffix of ['', '.worker', '.postgres', '.redis']) {
       try {
-        execSync(`docker rm -f dokku.auth.frontend.${FRONTEND_SERVICE}${suffix}`, {
+        execSync(`docker rm -f dokku.sso.frontend.${FRONTEND_SERVICE}${suffix}`, {
           encoding: 'utf-8',
           stdio: 'pipe',
         });
       } catch {}
     }
 
-    dokku(`auth:frontend:create ${FRONTEND_SERVICE} --provider authentik`);
+    dokku(`sso:frontend:create ${FRONTEND_SERVICE} --provider authentik`);
 
     // Wait for Authentik to be healthy
     console.log('Waiting for Authentik to be ready...');
     const healthy = await waitForHealthy(FRONTEND_SERVICE, 'frontend', 180000);
     if (!healthy) {
       try {
-        const logs = dokku(`auth:frontend:logs ${FRONTEND_SERVICE} -n 50`);
+        const logs = dokku(`sso:frontend:logs ${FRONTEND_SERVICE} -n 50`);
         console.log('Authentik logs:', logs);
       } catch {}
       throw new Error('Authentik not healthy');
     }
 
     // Get Authentik container info
-    const authentikContainerName = `dokku.auth.frontend.${FRONTEND_SERVICE}`;
+    const authentikContainerName = `dokku.sso.frontend.${FRONTEND_SERVICE}`;
     AUTHENTIK_INTERNAL_IP = getContainerIp(authentikContainerName);
     console.log(`Authentik internal IP: ${AUTHENTIK_INTERNAL_IP}`);
 
@@ -507,7 +507,7 @@ http {
 
     execSync(
       `docker run -d --name ${NGINX_CONTAINER} ` +
-        `--network ${AUTH_NETWORK} ` +
+        `--network ${SSO_NETWORK} ` +
         `-p ${AUTHENTIK_HTTPS_PORT}:${AUTHENTIK_HTTPS_PORT} ` +
         `-p ${GRAFANA_HTTPS_PORT}:${GRAFANA_HTTPS_PORT} ` +
         `-v /tmp/authentik-grafana-nginx.conf:/etc/nginx/nginx.conf:ro ` +
@@ -614,14 +614,14 @@ http {
       'GF_AUTH_ANONYMOUS_ENABLED=false',
       // Enable debug logging to see OIDC errors
       'GF_LOG_LEVEL=debug',
-      'GF_LOG_FILTERS=oauth:debug auth:debug',
+      'GF_LOG_FILTERS=osso:debug sso:debug',
     ];
 
     const envArgs = grafanaEnv.map((e) => `-e "${e}"`).join(' ');
 
     execSync(
       `docker run -d --name ${GRAFANA_CONTAINER} ` +
-        `--network ${AUTH_NETWORK} ` +
+        `--network ${SSO_NETWORK} ` +
         `--add-host=${AUTH_DOMAIN}:${nginxIp} ` +
         `${envArgs} ` +
         `grafana/grafana-oss:latest`,
@@ -663,14 +663,14 @@ http {
       execSync(`docker rm -f ${NGINX_CONTAINER}`, { encoding: 'utf-8', stdio: 'pipe' });
     } catch {}
     try {
-      dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true });
+      dokku(`sso:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true });
     } catch (e: any) {
       console.log('[cleanup] frontend:destroy:', e.stderr?.trim() || e.message);
     }
     try {
-      dokku(`auth:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
+      dokku(`sso:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 
@@ -919,7 +919,7 @@ http {
       // Get Authentik logs
       try {
         const authentikLogs = execSync(
-          `docker logs dokku.auth.frontend.${FRONTEND_SERVICE} 2>&1 | tail -50`,
+          `docker logs dokku.sso.frontend.${FRONTEND_SERVICE} 2>&1 | tail -50`,
           { encoding: 'utf-8' }
         );
         console.log('=== Authentik logs ===');

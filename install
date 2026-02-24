@@ -5,18 +5,18 @@ set -eo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config"
 
 main() {
-  echo "-----> Creating auth service directories"
+  echo "-----> Creating SSO service directories"
   mkdir -p "$PLUGIN_DATA_ROOT/directory"
   mkdir -p "$PLUGIN_DATA_ROOT/frontend"
   mkdir -p "$PLUGIN_DATA_ROOT/app-vars"
 
   chown -R "${DOKKU_SYSTEM_USER:-dokku}:${DOKKU_SYSTEM_GROUP:-dokku}" "$PLUGIN_DATA_ROOT" 2>/dev/null || true
 
-  # Create shared network for auth services
-  echo "-----> Creating auth network"
-  docker network create "$AUTH_NETWORK" 2>/dev/null || true
+  # Create shared network for SSO services
+  echo "-----> Creating SSO network"
+  docker network create "$SSO_NETWORK" 2>/dev/null || true
 
-  echo "-----> Auth plugin installed successfully"
+  echo "-----> SSO plugin installed successfully"
 }
 
 main "$@"

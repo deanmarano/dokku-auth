@@ -15,7 +15,7 @@ import {
  * - Invalid service names
  * - Status exit codes (0=healthy, 1=degraded, 2=down/missing)
  * - Missing arguments
- * - auth:create duplicate detection
+ * - sso:create duplicate detection
  */
 
 const DIR_SERVICE = 'error-dir-test';
@@ -27,7 +27,7 @@ test.describe('Error Handling', () => {
     console.log('=== Setting up error handling test environment ===');
 
     try {
-      dokku(`auth:create ${DIR_SERVICE}`);
+      dokku(`sso:create ${DIR_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) throw e;
     }
@@ -46,27 +46,27 @@ test.describe('Error Handling', () => {
 
   test.afterAll(async () => {
     console.log('=== Cleaning up ===');
-    try { dokku(`auth:unlink ${DIR_SERVICE} ${TEST_APP}`, { quiet: true }); } catch {}
+    try { dokku(`sso:unlink ${DIR_SERVICE} ${TEST_APP}`, { quiet: true }); } catch {}
     try { dokku(`apps:destroy ${TEST_APP} --force`, { quiet: true }); } catch {}
-    try { dokku(`auth:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true }); } catch {}
-    try { dokku(`auth:destroy ${DIR_SERVICE} -f`, { quiet: true }); } catch {}
+    try { dokku(`sso:frontend:destroy ${FRONTEND_SERVICE} -f`, { quiet: true }); } catch {}
+    try { dokku(`sso:destroy ${DIR_SERVICE} -f`, { quiet: true }); } catch {}
   });
 
   // --- Non-existent service ---
 
-  test('auth:info on non-existent service should fail', async () => {
+  test('sso:info on non-existent service should fail', async () => {
     try {
-      dokku('auth:info nonexistent-svc-xyz', { quiet: true });
+      dokku('sso:info nonexistent-svc-xyz', { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('does not exist');
     }
   });
 
-  test('auth:status on non-existent service should exit 2', async () => {
+  test('sso:status on non-existent service should exit 2', async () => {
     const cmd = USE_SUDO
-      ? 'sudo dokku auth:status nonexistent-svc-xyz'
-      : 'dokku auth:status nonexistent-svc-xyz';
+      ? 'sudo dokku sso:status nonexistent-svc-xyz'
+      : 'dokku sso:status nonexistent-svc-xyz';
     try {
       execSync(cmd, { encoding: 'utf-8', stdio: 'pipe' });
       expect(true).toBe(false);
@@ -75,36 +75,36 @@ test.describe('Error Handling', () => {
     }
   });
 
-  test('auth:credentials on non-existent service should fail', async () => {
+  test('sso:credentials on non-existent service should fail', async () => {
     try {
-      dokku('auth:credentials nonexistent-svc-xyz', { quiet: true });
+      dokku('sso:credentials nonexistent-svc-xyz', { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('does not exist');
     }
   });
 
-  test('auth:destroy on non-existent service should fail', async () => {
+  test('sso:destroy on non-existent service should fail', async () => {
     try {
-      dokku('auth:destroy nonexistent-svc-xyz -f', { quiet: true });
+      dokku('sso:destroy nonexistent-svc-xyz -f', { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('does not exist');
     }
   });
 
-  test('auth:link on non-existent service should fail', async () => {
+  test('sso:link on non-existent service should fail', async () => {
     try {
-      dokku(`auth:link nonexistent-svc-xyz ${TEST_APP}`, { quiet: true });
+      dokku(`sso:link nonexistent-svc-xyz ${TEST_APP}`, { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('does not exist');
     }
   });
 
-  test('auth:frontend:info on non-existent frontend should fail', async () => {
+  test('sso:frontend:info on non-existent frontend should fail', async () => {
     try {
-      dokku('auth:frontend:info nonexistent-fe-xyz', { quiet: true });
+      dokku('sso:frontend:info nonexistent-fe-xyz', { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('does not exist');
@@ -113,28 +113,28 @@ test.describe('Error Handling', () => {
 
   // --- Status exit codes ---
 
-  test('auth:status should exit 0 for healthy service', async () => {
+  test('sso:status should exit 0 for healthy service', async () => {
     const cmd = USE_SUDO
-      ? `sudo dokku auth:status ${DIR_SERVICE}`
-      : `dokku auth:status ${DIR_SERVICE}`;
+      ? `sudo dokku sso:status ${DIR_SERVICE}`
+      : `dokku sso:status ${DIR_SERVICE}`;
     const result = execSync(cmd, { encoding: 'utf-8' });
     expect(result).toContain('healthy');
     // Exit code 0 implied by no throw
   });
 
-  test('auth:status -q should suppress output', async () => {
+  test('sso:status -q should suppress output', async () => {
     const cmd = USE_SUDO
-      ? `sudo dokku auth:status ${DIR_SERVICE} -q`
-      : `dokku auth:status ${DIR_SERVICE} -q`;
+      ? `sudo dokku sso:status ${DIR_SERVICE} -q`
+      : `dokku sso:status ${DIR_SERVICE} -q`;
     const result = execSync(cmd, { encoding: 'utf-8' });
     // Quiet mode: output should be empty or minimal
     expect(result.trim()).toBe('');
   });
 
-  test('auth:status -q on non-existent should suppress error', async () => {
+  test('sso:status -q on non-existent should suppress error', async () => {
     const cmd = USE_SUDO
-      ? 'sudo dokku auth:status nonexistent-svc-xyz -q'
-      : 'dokku auth:status nonexistent-svc-xyz -q';
+      ? 'sudo dokku sso:status nonexistent-svc-xyz -q'
+      : 'dokku sso:status nonexistent-svc-xyz -q';
     try {
       execSync(cmd, { encoding: 'utf-8', stdio: 'pipe' });
       expect(true).toBe(false);
@@ -147,9 +147,9 @@ test.describe('Error Handling', () => {
 
   // --- Duplicate creation ---
 
-  test('auth:create should fail if service already exists', async () => {
+  test('sso:create should fail if service already exists', async () => {
     try {
-      dokku(`auth:create ${DIR_SERVICE}`, { quiet: true });
+      dokku(`sso:create ${DIR_SERVICE}`, { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('already exists');
@@ -158,27 +158,27 @@ test.describe('Error Handling', () => {
 
   // --- Invalid service names ---
 
-  test('auth:create should reject uppercase names', async () => {
+  test('sso:create should reject uppercase names', async () => {
     try {
-      dokku('auth:create UpperCase', { quiet: true });
+      dokku('sso:create UpperCase', { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('must start with a letter');
     }
   });
 
-  test('auth:create should reject names starting with number', async () => {
+  test('sso:create should reject names starting with number', async () => {
     try {
-      dokku('auth:create 123invalid', { quiet: true });
+      dokku('sso:create 123invalid', { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('must start with a letter');
     }
   });
 
-  test('auth:create should reject names with special characters', async () => {
+  test('sso:create should reject names with special characters', async () => {
     try {
-      dokku('auth:create bad_name!', { quiet: true });
+      dokku('sso:create bad_name!', { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('must start with a letter');
@@ -187,36 +187,36 @@ test.describe('Error Handling', () => {
 
   // --- Missing arguments ---
 
-  test('auth:create with no args should show usage', async () => {
+  test('sso:create with no args should show usage', async () => {
     try {
-      dokku('auth:create', { quiet: true });
+      dokku('sso:create', { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('Usage');
     }
   });
 
-  test('auth:link with no app should show usage', async () => {
+  test('sso:link with no app should show usage', async () => {
     try {
-      dokku(`auth:link ${DIR_SERVICE}`, { quiet: true });
+      dokku(`sso:link ${DIR_SERVICE}`, { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('Usage');
     }
   });
 
-  test('auth:protect with no args should show usage', async () => {
+  test('sso:protect with no args should show usage', async () => {
     try {
-      dokku('auth:protect', { quiet: true });
+      dokku('sso:protect', { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('Usage');
     }
   });
 
-  test('auth:unprotect with no args should show usage', async () => {
+  test('sso:unprotect with no args should show usage', async () => {
     try {
-      dokku('auth:unprotect', { quiet: true });
+      dokku('sso:unprotect', { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('Usage');
@@ -225,16 +225,16 @@ test.describe('Error Handling', () => {
 
   // --- destroy with linked apps (no -f) ---
 
-  test('auth:destroy without -f should fail when apps are linked', async () => {
+  test('sso:destroy without -f should fail when apps are linked', async () => {
     // Link an app
-    dokku(`auth:link ${DIR_SERVICE} ${TEST_APP}`);
+    dokku(`sso:link ${DIR_SERVICE} ${TEST_APP}`);
 
     // Try destroy without -f — should fail (requires interactive confirm AND has linked apps)
     try {
       // Use execSync directly to capture exit code; stdin is not a TTY so confirmation will fail
       const cmd = USE_SUDO
-        ? `sudo dokku auth:destroy ${DIR_SERVICE}`
-        : `dokku auth:destroy ${DIR_SERVICE}`;
+        ? `sudo dokku sso:destroy ${DIR_SERVICE}`
+        : `dokku sso:destroy ${DIR_SERVICE}`;
       execSync(cmd, { encoding: 'utf-8', stdio: 'pipe', timeout: 10000 });
       expect(true).toBe(false);
     } catch (e: any) {
@@ -244,48 +244,48 @@ test.describe('Error Handling', () => {
     }
   });
 
-  test('auth:destroy with -f should succeed despite linked apps', async () => {
+  test('sso:destroy with -f should succeed despite linked apps', async () => {
     // Re-create service for subsequent tests to work in afterAll
     // But first verify -f works
-    const output = dokku(`auth:destroy ${DIR_SERVICE} -f`);
+    const output = dokku(`sso:destroy ${DIR_SERVICE} -f`);
     expect(output).toContain('Destroying');
     expect(output).toContain('destroyed');
 
     // Re-create for cleanup symmetry
-    dokku(`auth:create ${DIR_SERVICE}`);
+    dokku(`sso:create ${DIR_SERVICE}`);
     await waitForHealthy(DIR_SERVICE, 'directory');
   });
 
   // --- Frontend destroy with protected apps ---
 
-  test('auth:frontend:destroy without -f should fail when apps protected', async () => {
+  test('sso:frontend:destroy without -f should fail when apps protected', async () => {
     // Create frontend
     try {
-      dokku(`auth:frontend:create ${FRONTEND_SERVICE}`);
+      dokku(`sso:frontend:create ${FRONTEND_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) throw e;
     }
 
     try {
-      dokku(`auth:frontend:use-directory ${FRONTEND_SERVICE} ${DIR_SERVICE}`);
+      dokku(`sso:frontend:use-directory ${FRONTEND_SERVICE} ${DIR_SERVICE}`);
     } catch {}
 
-    dokku(`auth:frontend:config ${FRONTEND_SERVICE} DOMAIN=err-test.local`);
+    dokku(`sso:frontend:config ${FRONTEND_SERVICE} DOMAIN=err-test.local`);
 
     try {
-      dokku(`auth:frontend:apply ${FRONTEND_SERVICE}`);
+      dokku(`sso:frontend:apply ${FRONTEND_SERVICE}`);
     } catch {}
 
     await waitForHealthy(FRONTEND_SERVICE, 'frontend', 120000);
 
     // Protect an app
-    dokku(`auth:frontend:protect ${FRONTEND_SERVICE} ${TEST_APP}`);
+    dokku(`sso:frontend:protect ${FRONTEND_SERVICE} ${TEST_APP}`);
 
     // Try destroy without -f
     try {
       const cmd = USE_SUDO
-        ? `sudo dokku auth:frontend:destroy ${FRONTEND_SERVICE}`
-        : `dokku auth:frontend:destroy ${FRONTEND_SERVICE}`;
+        ? `sudo dokku sso:frontend:destroy ${FRONTEND_SERVICE}`
+        : `dokku sso:frontend:destroy ${FRONTEND_SERVICE}`;
       execSync(cmd, { encoding: 'utf-8', stdio: 'pipe', timeout: 10000 });
       expect(true).toBe(false);
     } catch (e: any) {
@@ -293,18 +293,18 @@ test.describe('Error Handling', () => {
     }
 
     // Cleanup: unprotect so afterAll can destroy
-    try { dokku(`auth:frontend:unprotect ${FRONTEND_SERVICE} ${TEST_APP}`, { quiet: true }); } catch {}
+    try { dokku(`sso:frontend:unprotect ${FRONTEND_SERVICE} ${TEST_APP}`, { quiet: true }); } catch {}
   });
 
   // --- Unknown command ---
 
-  test('unknown auth subcommand should fail with help hint', async () => {
+  test('unknown sso subcommand should fail with help hint', async () => {
     try {
-      dokku('auth:nonexistent-command-xyz', { quiet: true });
+      dokku('sso:nonexistent-command-xyz', { quiet: true });
       expect(true).toBe(false);
     } catch (e: any) {
       expect(e.stderr).toContain('Unknown command');
-      expect(e.stderr).toContain('auth:help');
+      expect(e.stderr).toContain('sso:help');
     }
   });
 });

@@ -24,7 +24,7 @@ test.describe('Authentik Frontend Provider', () => {
     // Create directory service first (Authentik needs LDAP backend)
     console.log('Creating directory service...');
     try {
-      dokku(`auth:create ${DIRECTORY_SERVICE}`);
+      dokku(`sso:create ${DIRECTORY_SERVICE}`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -40,7 +40,7 @@ test.describe('Authentik Frontend Provider', () => {
     // Create Authentik frontend service
     console.log('Creating Authentik frontend service...');
     try {
-      dokku(`auth:frontend:create ${SERVICE_NAME} --provider authentik`);
+      dokku(`sso:frontend:create ${SERVICE_NAME} --provider authentik`);
     } catch (e: any) {
       if (!e.stderr?.includes('already exists')) {
         throw e;
@@ -52,7 +52,7 @@ test.describe('Authentik Frontend Provider', () => {
     if (!healthy) {
       // Get logs for debugging
       try {
-        const logs = dokku(`auth:frontend:logs ${SERVICE_NAME} -n 50`);
+        const logs = dokku(`sso:frontend:logs ${SERVICE_NAME} -n 50`);
         console.log('Authentik logs:', logs);
       } catch {}
       throw new Error('Authentik service not healthy');
@@ -64,29 +64,29 @@ test.describe('Authentik Frontend Provider', () => {
   test.afterAll(async () => {
     console.log('=== Cleaning up Authentik test ===');
     try {
-      dokku(`auth:frontend:destroy ${SERVICE_NAME} -f`, { quiet: true });
+      dokku(`sso:frontend:destroy ${SERVICE_NAME} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:frontend:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:frontend:destroy:', e.stderr?.trim() || e.message);
     }
     try {
-      dokku(`auth:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
+      dokku(`sso:destroy ${DIRECTORY_SERVICE} -f`, { quiet: true });
     } catch (e: any) {
-      console.log('[cleanup] auth:destroy:', e.stderr?.trim() || e.message);
+      console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
   });
 
   test('service status shows healthy', async () => {
-    const status = dokku(`auth:frontend:status ${SERVICE_NAME}`);
+    const status = dokku(`sso:frontend:status ${SERVICE_NAME}`);
     expect(status.toLowerCase()).toMatch(/healthy|running/);
   });
 
   test('service info shows Authentik provider', async () => {
-    const info = dokku(`auth:frontend:info ${SERVICE_NAME}`);
+    const info = dokku(`sso:frontend:info ${SERVICE_NAME}`);
     expect(info.toLowerCase()).toContain('authentik');
   });
 
   test('server container is running', async () => {
-    const serverContainer = `dokku.auth.frontend.${SERVICE_NAME}`;
+    const serverContainer = `dokku.sso.frontend.${SERVICE_NAME}`;
     const result = execSync(
       `docker ps --format '{{.Names}}' | grep -q "^${serverContainer}$" && echo "running"`,
       { encoding: 'utf-8', shell: '/bin/bash' }
@@ -95,7 +95,7 @@ test.describe('Authentik Frontend Provider', () => {
   });
 
   test('worker container is running', async () => {
-    const workerContainer = `dokku.auth.frontend.${SERVICE_NAME}.worker`;
+    const workerContainer = `dokku.sso.frontend.${SERVICE_NAME}.worker`;
     const result = execSync(
       `docker ps --format '{{.Names}}' | grep -q "^${workerContainer}$" && echo "running"`,
       { encoding: 'utf-8', shell: '/bin/bash' }
@@ -104,7 +104,7 @@ test.describe('Authentik Frontend Provider', () => {
   });
 
   test('health endpoint responds', async () => {
-    const serverContainer = `dokku.auth.frontend.${SERVICE_NAME}`;
+    const serverContainer = `dokku.sso.frontend.${SERVICE_NAME}`;
 
     // Use Authentik's built-in healthcheck command
     const result = execSync(
@@ -117,14 +117,14 @@ test.describe('Authentik Frontend Provider', () => {
   });
 
   test('info shows PostgreSQL and Redis services', async () => {
-    const info = dokku(`auth:frontend:info ${SERVICE_NAME}`);
+    const info = dokku(`sso:frontend:info ${SERVICE_NAME}`);
     expect(info.toLowerCase()).toContain('postgresql');
     expect(info.toLowerCase()).toContain('redis');
   });
 
   test('can link to directory service', async () => {
     // Link to directory (this should output LDAP config instructions)
-    const result = dokku(`auth:frontend:use-directory ${SERVICE_NAME} ${DIRECTORY_SERVICE}`);
+    const result = dokku(`sso:frontend:use-directory ${SERVICE_NAME} ${DIRECTORY_SERVICE}`);
     expect(result.toLowerCase()).toContain('ldap');
   });
 });

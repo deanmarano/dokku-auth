@@ -19,7 +19,7 @@ import {
 /**
  * Grafana LDAP Integration E2E Test
  *
- * Tests Grafana deployed via library:checkout with auth protection:
+ * Tests Grafana deployed via library:checkout with SSO protection:
  * 1. Deploy Grafana as a proper dokku app
  * 2. Protect it with Authelia forward auth
  * 3. Verify auth redirect and login flow
