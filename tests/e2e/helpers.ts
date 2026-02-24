@@ -245,11 +245,18 @@ export interface AuthCredentials {
 /**
  * Set up SSO directory + frontend services for testing.
  * Returns credentials needed for test user creation and login.
+ *
+ * Force-destroys any existing services first to ensure a clean state,
+ * since previous test runs may leave partial state behind.
  */
 export function setupAuthServices(
   authService = 'test-auth',
   frontendService = 'test-frontend',
 ): AuthCredentials {
+  // Clean up any stale state from previous runs to avoid "already exists"
+  // errors with missing config files
+  teardownAuthServices(authService, frontendService);
+
   dokku(`sso:create ${authService}`, { timeout: 180000, ignoreAlreadyExists: true });
   dokku(`sso:frontend:create ${frontendService}`, { timeout: 180000, ignoreAlreadyExists: true });
   dokku(`sso:frontend:use-directory ${frontendService} ${authService}`, {
@@ -281,6 +288,16 @@ export function teardownAuthServices(
     swallowErrors: true,
     quiet: true,
   });
+  // If sso:destroy failed (e.g., provider_destroy failed before rm -rf),
+  // manually clean up the service directory to prevent stale state
+  try {
+    execSync(
+      USE_SUDO
+        ? `sudo rm -rf /var/lib/dokku/services/sso/directory/${authService}`
+        : `rm -rf /var/lib/dokku/services/sso/directory/${authService}`,
+      { encoding: 'utf-8', stdio: 'pipe' },
+    );
+  } catch {}
 }
 
 /** Create a test user in the LDAP directory via the sso plugin. */
