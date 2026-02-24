@@ -64,7 +64,7 @@ test.describe('GitLab LDAP Integration', () => {
       throw new Error('LLDAP service not healthy');
     }
 
-    LDAP_CONTAINER_IP = getContainerIp(getDirectoryContainerId(SERVICE_NAME));
+    LDAP_CONTAINER_IP = getContainerIp(getDirectoryContainerId(SERVICE_NAME), 'dokku.sso.network');
     console.log(`LLDAP container IP: ${LDAP_CONTAINER_IP}`);
 
     // 2. Get credentials

@@ -214,6 +214,7 @@ jobs:
           # Allow runner user to run dokku commands
           sudo usermod -aG docker $USER
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
           # Set global domain for app deployments
           sudo dokku domains:set-global test.local
 
@@ -276,6 +277,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -331,6 +333,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -390,6 +393,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -445,6 +449,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -506,6 +511,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -566,6 +572,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -632,6 +639,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -689,6 +697,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -745,6 +754,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -801,6 +811,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -859,6 +870,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -917,6 +929,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -980,6 +993,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -1047,6 +1061,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -1108,6 +1123,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso
@@ -1175,6 +1191,7 @@ jobs:
           wget -NP . https://dokku.com/install/v0.37.6/bootstrap.sh
           sudo DOKKU_TAG=v0.37.6 bash bootstrap.sh
           echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/dokku" | sudo tee /etc/sudoers.d/dokku-runner
+          sudo chmod 0440 /etc/sudoers.d/dokku-runner
       - name: Install plugin
         run: |
           sudo mkdir -p /var/lib/dokku/plugins/available/sso

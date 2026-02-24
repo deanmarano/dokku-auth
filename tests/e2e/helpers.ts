@@ -82,9 +82,16 @@ export function getDirectoryContainerId(serviceName: string): string {
   return `dokku.sso.directory.${serviceName}`;
 }
 
-/** Get the first IP address of a Docker container. */
-export function getContainerIp(containerName: string): string {
+/** Get the IP address of a Docker container, optionally for a specific network. */
+export function getContainerIp(containerName: string, network?: string): string {
   try {
+    if (network) {
+      const ip = execSync(
+        `docker inspect -f '{{(index .NetworkSettings.Networks "${network}").IPAddress}}' ${containerName}`,
+        { encoding: 'utf-8' },
+      ).trim();
+      if (ip) return ip;
+    }
     const ips = execSync(
       `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' ${containerName}`,
       { encoding: 'utf-8' },

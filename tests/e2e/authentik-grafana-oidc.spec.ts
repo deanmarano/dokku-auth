@@ -427,7 +427,7 @@ test.describe('Authentik + Grafana OIDC Browser Flow', () => {
 
     // Get Authentik container info
     const authentikContainerName = `dokku.sso.frontend.${FRONTEND_SERVICE}`;
-    AUTHENTIK_INTERNAL_IP = getContainerIp(authentikContainerName);
+    AUTHENTIK_INTERNAL_IP = getContainerIp(authentikContainerName, 'dokku.sso.network');
     console.log(`Authentik internal IP: ${AUTHENTIK_INTERNAL_IP}`);
 
     // Get bootstrap token from service directory

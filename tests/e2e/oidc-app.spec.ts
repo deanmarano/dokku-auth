@@ -160,7 +160,7 @@ test.describe('OIDC Application Browser Flow', () => {
 
     // Get Authelia container IP for internal communication
     const autheliaContainerName = `dokku.sso.frontend.${FRONTEND_SERVICE}`;
-    AUTHELIA_INTERNAL_IP = getContainerIp(autheliaContainerName);
+    AUTHELIA_INTERNAL_IP = getContainerIp(autheliaContainerName, 'dokku.sso.network');
     console.log(`Authelia internal IP: ${AUTHELIA_INTERNAL_IP}`);
 
     // 7. Create test user in LLDAP

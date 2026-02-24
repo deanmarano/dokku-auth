@@ -56,7 +56,7 @@ test.describe('Authentik + Grafana LDAP Integration', () => {
       throw new Error('LLDAP service not healthy');
     }
 
-    LDAP_CONTAINER_IP = getContainerIp(getDirectoryContainerId(DIRECTORY_SERVICE));
+    LDAP_CONTAINER_IP = getContainerIp(getDirectoryContainerId(DIRECTORY_SERVICE), 'dokku.sso.network');
     console.log(`LLDAP container IP: ${LDAP_CONTAINER_IP}`);
 
     // Use the well-known SSO network name (must match config's SSO_NETWORK)

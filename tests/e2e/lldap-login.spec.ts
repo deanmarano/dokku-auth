@@ -29,7 +29,7 @@ let ADMIN_PASSWORD: string;
 const ADMIN_USER = 'admin';
 
 test.beforeAll(() => {
-  const containerIp = getContainerIp(getDirectoryContainerId(SERVICE_NAME));
+  const containerIp = getContainerIp(getDirectoryContainerId(SERVICE_NAME), 'dokku.sso.network');
   LLDAP_URL = `http://${containerIp}:17170`;
   ADMIN_PASSWORD = getAdminPassword(SERVICE_NAME);
   console.log(`LLDAP URL: ${LLDAP_URL}`);

@@ -50,7 +50,7 @@ test.describe('OIDC Client Integration', () => {
       throw new Error('LLDAP service not healthy');
     }
 
-    const ldapContainerIp = getContainerIp(getDirectoryContainerId(DIRECTORY_SERVICE));
+    const ldapContainerIp = getContainerIp(getDirectoryContainerId(DIRECTORY_SERVICE), 'dokku.sso.network');
     LLDAP_URL = `http://${ldapContainerIp}:17170`;
     console.log(`LLDAP URL: ${LLDAP_URL}`);
 
@@ -115,7 +115,7 @@ test.describe('OIDC Client Integration', () => {
     }
 
     // Get Authelia container IP
-    const autheliaContainerIp = getContainerIp(`dokku.sso.frontend.${FRONTEND_SERVICE}`);
+    const autheliaContainerIp = getContainerIp(`dokku.sso.frontend.${FRONTEND_SERVICE}`, 'dokku.sso.network');
     AUTHELIA_URL = `http://${autheliaContainerIp}:9091`;
     console.log(`Authelia URL: ${AUTHELIA_URL}`);
 

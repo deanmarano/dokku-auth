@@ -57,7 +57,7 @@ test.describe('App LDAP Integration', () => {
       throw new Error('LLDAP service not healthy');
     }
 
-    LDAP_CONTAINER_IP = getContainerIp(getDirectoryContainerId(SERVICE_NAME));
+    LDAP_CONTAINER_IP = getContainerIp(getDirectoryContainerId(SERVICE_NAME), 'dokku.sso.network');
     LLDAP_URL = `http://${LDAP_CONTAINER_IP}:17170`;
     console.log(`LLDAP container IP: ${LDAP_CONTAINER_IP}`);
     console.log(`LLDAP URL: ${LLDAP_URL}`);
