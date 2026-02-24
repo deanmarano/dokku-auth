@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
+# Plugin configuration
 
 export PLUGIN_COMMAND_PREFIX="auth"
 export PLUGIN_SERVICE="auth"
