@@ -102,9 +102,13 @@ USERSEOF
   # Set port mapping before deploy (Dokku may not auto-detect from image on redeploy)
   "$DOKKU_BIN" ports:set "$APP_NAME" http:80:9091 < /dev/null 2>/dev/null || true
 
-  # Deploy from image
+  # Deploy from image (use ps:rebuild if already deployed, git:from-image for first deploy)
   echo "-----> Deploying $PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
-  "$DOKKU_BIN" git:from-image "$APP_NAME" "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION" < /dev/null
+  if "$DOKKU_BIN" ps:report "$APP_NAME" --deployed < /dev/null 2>/dev/null | grep -q "true"; then
+    "$DOKKU_BIN" ps:rebuild "$APP_NAME" < /dev/null
+  else
+    "$DOKKU_BIN" git:from-image "$APP_NAME" "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION" < /dev/null
+  fi
 
   # Wait for app to be running
   echo "-----> Waiting for Authelia to be ready"
