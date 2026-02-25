@@ -95,9 +95,10 @@ USERSEOF
   "$DOKKU_BIN" config:set --no-restart "$APP_NAME" \
     TZ="${TZ:-UTC}" < /dev/null
 
-  # Set domain
+  # Set domain and port
   echo "-----> Setting domain $DOMAIN"
   "$DOKKU_BIN" domains:set "$APP_NAME" "$DOMAIN" < /dev/null
+  "$DOKKU_BIN" ports:set "$APP_NAME" http:80:9091 < /dev/null 2>/dev/null || true
 
   # Deploy from image
   echo "-----> Deploying $PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import {
+  USE_SUDO,
   dokku,
   getContainerIp,
   waitForHealthy,
@@ -368,6 +369,24 @@ test.describe('Authentik + Grafana OIDC Browser Flow', () => {
   test.beforeAll(async () => {
     console.log('=== Setting up Authentik + Grafana OIDC test ===');
 
+    // Clean up any stale state from previous runs
+    console.log('Cleaning up stale state...');
+    for (const container of [GRAFANA_CONTAINER, NGINX_CONTAINER]) {
+      try {
+        execSync(`docker rm -f ${container}`, { encoding: 'utf-8', stdio: 'pipe' });
+      } catch {}
+    }
+    dokku(`sso:frontend:destroy ${FRONTEND_SERVICE} -f`, { swallowErrors: true, quiet: true });
+    dokku(`sso:destroy ${DIRECTORY_SERVICE} -f`, { swallowErrors: true, quiet: true });
+    try {
+      execSync(
+        USE_SUDO
+          ? `sudo rm -rf /var/lib/dokku/services/sso/directory/${DIRECTORY_SERVICE} /var/lib/dokku/services/sso/frontend/${FRONTEND_SERVICE}`
+          : `rm -rf /var/lib/dokku/services/sso/directory/${DIRECTORY_SERVICE} /var/lib/dokku/services/sso/frontend/${FRONTEND_SERVICE}`,
+        { encoding: 'utf-8', stdio: 'pipe' },
+      );
+    } catch {}
+
     // Generate TLS certificates
     console.log('Generating self-signed certificates...');
     generateCerts();
@@ -666,6 +685,15 @@ http {
     } catch (e: any) {
       console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
+    // Manual cleanup in case destroy commands failed
+    try {
+      execSync(
+        USE_SUDO
+          ? `sudo rm -rf /var/lib/dokku/services/sso/directory/${DIRECTORY_SERVICE} /var/lib/dokku/services/sso/frontend/${FRONTEND_SERVICE}`
+          : `rm -rf /var/lib/dokku/services/sso/directory/${DIRECTORY_SERVICE} /var/lib/dokku/services/sso/frontend/${FRONTEND_SERVICE}`,
+        { encoding: 'utf-8', stdio: 'pipe' },
+      );
+    } catch {}
   });
 
   test('Full OIDC browser login flow works end-to-end', async ({ page }) => {

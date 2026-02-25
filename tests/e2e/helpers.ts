@@ -263,6 +263,8 @@ export function setupAuthServices(
     timeout: 60000,
     swallowErrors: true,
   });
+  // Apply frontend config so Authelia restarts with LDAP backend
+  dokku(`sso:frontend:apply ${frontendService}`, { timeout: 180000 });
 
   const credentials = dokku(`sso:credentials ${authService}`, { logOutput: false });
   const ldapUrl =
