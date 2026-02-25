@@ -34,28 +34,24 @@ if ! provider_validate_config "$SERVICE"; then
   exit 1
 fi
 
-# Stop existing app/container if running
+# Check if app already exists
 APP_NAME=$(get_frontend_app_name "$SERVICE")
-if [[ -n "$APP_NAME" ]]; then
-  if provider_is_running "$SERVICE"; then
-    echo "       Stopping existing app..."
-    provider_destroy "$SERVICE"
-  fi
+if [[ -n "$APP_NAME" ]] && "$DOKKU_BIN" apps:exists "$APP_NAME" < /dev/null 2>/dev/null; then
+  # App exists — regenerate config and redeploy in-place
+  # Re-run provider_create_container which regenerates config + redeploys
+  echo "       Updating configuration and redeploying..."
+  provider_create_container "$SERVICE"
+
+  # Reload frontend provider (provider_create_container may load directory provider)
+  load_frontend_provider "$SERVICE"
 else
-  # Legacy Docker container mode
-  CONTAINER_NAME=$(get_frontend_container_name "$SERVICE")
-  if docker ps -q -f "name=^${CONTAINER_NAME}$" | grep -q .; then
-    echo "       Stopping existing container..."
-    provider_destroy "$SERVICE"
-  fi
+  # No app yet — full create
+  echo "       Creating app..."
+  provider_create_container "$SERVICE"
+
+  # Reload frontend provider
+  load_frontend_provider "$SERVICE"
 fi
-
-# Create new app/container
-echo "       Creating app..."
-provider_create_container "$SERVICE"
-
-# Reload frontend provider (generate_authelia_config loads directory provider which overwrites functions)
-load_frontend_provider "$SERVICE"
 
 # Verify it's working
 echo "       Verifying service..."

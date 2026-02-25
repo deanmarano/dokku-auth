@@ -95,9 +95,11 @@ USERSEOF
   "$DOKKU_BIN" config:set --no-restart "$APP_NAME" \
     TZ="${TZ:-UTC}" < /dev/null
 
-  # Set domain and port
+  # Set domain
   echo "-----> Setting domain $DOMAIN"
   "$DOKKU_BIN" domains:set "$APP_NAME" "$DOMAIN" < /dev/null
+
+  # Set port mapping before deploy (Dokku may not auto-detect from image on redeploy)
   "$DOKKU_BIN" ports:set "$APP_NAME" http:80:9091 < /dev/null 2>/dev/null || true
 
   # Deploy from image
