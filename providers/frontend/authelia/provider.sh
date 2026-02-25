@@ -462,6 +462,17 @@ provider_protect_app() {
   local DOMAIN
   DOMAIN=$(cat "$CONFIG_DIR/DOMAIN")
 
+  # Determine URL scheme: use http for localhost or .local domains (testing), https otherwise
+  local URL_SCHEME="https"
+  if [[ "$DOMAIN" == localhost* ]] || [[ "$DOMAIN" == *.local ]]; then
+    URL_SCHEME="http"
+  fi
+
+  # Get the Authelia app name for internal auth_request subrequest
+  # Use internal Dokku-proxied URL to avoid SSL issues with auth_request
+  local APP_NAME
+  APP_NAME=$(get_frontend_app_name "$SERVICE")
+
   # Set AUTHELIA_DOMAIN env var on the protected app
   "$DOKKU_BIN" config:set --no-restart "$APP" \
     AUTHELIA_DOMAIN="$DOMAIN" \
@@ -482,7 +493,7 @@ provider_protect_app() {
 # Server-level locations
 location /authelia-auth {
     internal;
-    proxy_pass https://$DOMAIN/api/authz/auth-request;
+    proxy_pass ${URL_SCHEME}://$DOMAIN/api/authz/auth-request;
     proxy_pass_request_body off;
     proxy_ssl_verify off;
     proxy_set_header Content-Length "";
@@ -496,7 +507,7 @@ location /authelia-auth {
 
 location @forward_auth_login {
     auth_request off;
-    return 302 https://$DOMAIN/?rd=\$scheme://\$http_host\$request_uri;
+    return 302 ${URL_SCHEME}://$DOMAIN/?rd=\$scheme://\$http_host\$request_uri;
 }
 
 # Directives below are injected into location / by the nginx-pre-reload trigger

@@ -88,14 +88,12 @@ else
   provider_destroy "$SERVICE"
 fi
 
-# Remove service directory (may need elevated permissions for container-created files)
+# Remove service directory
 if [[ -d "$SERVICE_ROOT" ]]; then
-  if ! rm -rf "$SERVICE_ROOT" 2>/dev/null; then
-    if [[ "$(id -u)" != "0" ]]; then
-      sudo rm -rf "$SERVICE_ROOT"
-    else
-      rm -rf "$SERVICE_ROOT" || true
-    fi
+  rm -rf "$SERVICE_ROOT" 2>/dev/null || true
+  if [[ -d "$SERVICE_ROOT" ]]; then
+    echo "!     Warning: Could not fully remove $SERVICE_ROOT" >&2
+    echo "       You may need to remove it manually with: sudo rm -rf $SERVICE_ROOT" >&2
   fi
 fi
 

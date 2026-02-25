@@ -69,6 +69,25 @@ test.describe('OIDC Application Browser Flow', () => {
   test.beforeAll(async () => {
     console.log('=== Setting up OIDC application test environment ===');
 
+    // Clean up any stale state from previous runs
+    console.log('Cleaning up stale state...');
+    for (const container of [NGINX_CONTAINER, OAUTH2_PROXY_CONTAINER, BACKEND_CONTAINER]) {
+      try {
+        execSync(`docker rm -f ${container}`, { encoding: 'utf-8', stdio: 'pipe' });
+      } catch {}
+    }
+    dokku(`sso:frontend:destroy ${FRONTEND_SERVICE} -f`, { swallowErrors: true, quiet: true });
+    dokku(`sso:destroy ${DIRECTORY_SERVICE} -f`, { swallowErrors: true, quiet: true });
+    // Manual cleanup in case destroy failed to remove service directories
+    try {
+      execSync(
+        USE_SUDO
+          ? `sudo rm -rf /var/lib/dokku/services/sso/directory/${DIRECTORY_SERVICE} /var/lib/dokku/services/sso/frontend/${FRONTEND_SERVICE}`
+          : `rm -rf /var/lib/dokku/services/sso/directory/${DIRECTORY_SERVICE} /var/lib/dokku/services/sso/frontend/${FRONTEND_SERVICE}`,
+        { encoding: 'utf-8', stdio: 'pipe' },
+      );
+    } catch {}
+
     // Generate self-signed certificates
     generateCerts();
 
@@ -394,6 +413,15 @@ http {
     } catch (e: any) {
       console.log('[cleanup] sso:destroy:', e.stderr?.trim() || e.message);
     }
+    // Manual cleanup in case destroy commands failed
+    try {
+      execSync(
+        USE_SUDO
+          ? `sudo rm -rf /var/lib/dokku/services/sso/directory/${DIRECTORY_SERVICE} /var/lib/dokku/services/sso/frontend/${FRONTEND_SERVICE}`
+          : `rm -rf /var/lib/dokku/services/sso/directory/${DIRECTORY_SERVICE} /var/lib/dokku/services/sso/frontend/${FRONTEND_SERVICE}`,
+        { encoding: 'utf-8', stdio: 'pipe' },
+      );
+    } catch {}
   });
 
   test('OIDC browser login flow works end-to-end', async ({ page }) => {

@@ -46,6 +46,7 @@ test.describe('Jellyfin LDAP Integration', () => {
     await waitForAuthHealthy(AUTH_SERVICE);
     createLdapTestUser(AUTH_SERVICE, TEST_USER);
     addHostsEntry(DOMAIN);
+    addHostsEntry('auth.test.local');
 
     dokku(
       `library:checkout jellyfin --name=${APP} --domain=${DOMAIN} --no-ssl --non-interactive --auth-service=${AUTH_SERVICE}`,

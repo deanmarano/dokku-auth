@@ -474,9 +474,10 @@ export async function loginViaAuthelia(
 
   await page.locator('button[type="submit"], #sign-in-button').click();
 
-  await page.waitForURL((url) => !url.href.includes('authelia'), {
-    timeout: 15000,
-  });
+  await page.waitForURL(
+    (url) => !url.href.includes('authelia') && !url.href.includes('auth.test.local'),
+    { timeout: 15000 },
+  );
 }
 
 /** Verify that accessing a URL redirects to Authelia login. */
@@ -486,7 +487,8 @@ export async function verifyAutheliaRedirect(
 ): Promise<boolean> {
   await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
   const url = page.url();
-  return url.includes('authelia') || url.includes('/api/verify');
+  // Check if redirected to Authelia: URL contains 'authelia', the auth domain, or the rd= query param
+  return url.includes('authelia') || url.includes('auth.test.local') || url.includes('/api/verify') || url.includes('rd=');
 }
 
 // ─── Preset helpers (used by gitlab-ldap and other non-library tests) ────────
