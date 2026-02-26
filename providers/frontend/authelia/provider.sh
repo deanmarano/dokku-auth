@@ -106,10 +106,12 @@ USERSEOF
   echo "-----> Attaching to network $SSO_NETWORK"
   "$DOKKU_BIN" network:set "$APP_NAME" attach-post-deploy "$SSO_NETWORK" < /dev/null
 
-  # Deploy from image (use ps:rebuild if already deployed, git:from-image for first deploy)
+  # Deploy from image or restart if already deployed
+  # Config is bind-mounted, so a restart picks up changes without a full rebuild
   echo "-----> Deploying $PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
   if "$DOKKU_BIN" ps:report "$APP_NAME" --deployed < /dev/null 2>/dev/null | grep -q "true"; then
-    "$DOKKU_BIN" ps:rebuild "$APP_NAME" < /dev/null
+    echo "       App already deployed, restarting to pick up config changes..."
+    "$DOKKU_BIN" ps:restart "$APP_NAME" < /dev/null
   else
     "$DOKKU_BIN" git:from-image "$APP_NAME" "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION" < /dev/null
   fi
