@@ -188,9 +188,11 @@ generate_authelia_config() {
     COOKIE_DOMAIN="$DOMAIN"
   fi
 
-  # Determine URL scheme - use http for localhost/.local (testing), https otherwise
+  # Determine URL scheme - use http for localhost (testing), https otherwise
+  # Note: .local domains still use https here because Authelia v4.39+ requires
+  # secure schemes for authelia_url and default_redirection_url in config
   local URL_SCHEME="https"
-  if [[ "$DOMAIN" == localhost* ]] || [[ "$DOMAIN" == *.local ]]; then
+  if [[ "$DOMAIN" == localhost* ]]; then
     URL_SCHEME="http"
   fi
 
