@@ -258,13 +258,8 @@ export function setupAuthServices(
   teardownAuthServices(authService, frontendService);
 
   dokku(`sso:create ${authService}`, { timeout: 180000, ignoreAlreadyExists: true });
-  dokku(`sso:frontend:create ${frontendService}`, { timeout: 180000, ignoreAlreadyExists: true });
-  dokku(`sso:frontend:use-directory ${frontendService} ${authService}`, {
-    timeout: 60000,
-    swallowErrors: true,
-  });
-  // Apply frontend config so Authelia restarts with LDAP backend
-  dokku(`sso:frontend:apply ${frontendService}`, { timeout: 180000 });
+  // Use --directory to link LDAP before first deploy, avoiding a fragile redeploy via frontend:apply
+  dokku(`sso:frontend:create ${frontendService} --directory ${authService}`, { timeout: 180000, ignoreAlreadyExists: true });
 
   const credentials = dokku(`sso:credentials ${authService}`, { logOutput: false });
   const ldapUrl =

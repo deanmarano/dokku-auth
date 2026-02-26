@@ -115,11 +115,7 @@ USERSEOF
     # since only the config file changed, not the image.
     echo "       App already deployed, restarting container..."
     local CONTAINER_ID
-    CONTAINER_ID=$("$DOKKU_BIN" ps:report "$APP_NAME" --status-web-1 < /dev/null 2>/dev/null | tr -d '[:space:]')
-    if [[ "$CONTAINER_ID" == "running" ]]; then
-      # Get actual container ID
-      CONTAINER_ID=$(docker ps -q -f "label=com.dokku.app-name=$APP_NAME" 2>/dev/null | head -1)
-    fi
+    CONTAINER_ID=$(docker ps -q -f "label=com.dokku.app-name=$APP_NAME" 2>/dev/null | head -1 || true)
     if [[ -n "$CONTAINER_ID" ]]; then
       docker restart "$CONTAINER_ID" 2>/dev/null || true
     else

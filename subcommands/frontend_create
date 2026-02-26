@@ -12,6 +12,7 @@ source "$PLUGIN_BASE_PATH/providers/loader.sh"
 SERVICE=""
 PROVIDER=""
 ADOPT_APP=""
+DIRECTORY=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --provider)
@@ -28,6 +29,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --app=*)
       ADOPT_APP="${1#*=}"
+      shift
+      ;;
+    --directory)
+      DIRECTORY="$2"
+      shift 2
+      ;;
+    --directory=*)
+      DIRECTORY="${1#*=}"
       shift
       ;;
     -*)
@@ -83,6 +92,16 @@ echo "-----> Creating frontend SSO service $SERVICE (provider: $PROVIDER)"
 # Create service directory (idempotent for adopt case)
 mkdir -p "$SERVICE_ROOT/config" "$SERVICE_ROOT/data"
 echo "$PROVIDER" > "$SERVICE_ROOT/PROVIDER"
+
+# Link directory service if specified (before provider load so config includes LDAP)
+if [[ -n "$DIRECTORY" ]]; then
+  if ! directory_service_exists "$DIRECTORY"; then
+    echo "!     Directory service $DIRECTORY does not exist" >&2
+    exit 1
+  fi
+  echo "$DIRECTORY" > "$SERVICE_ROOT/DIRECTORY"
+  echo "-----> Linking to directory service $DIRECTORY"
+fi
 
 # Load provider
 load_frontend_provider "$SERVICE"
