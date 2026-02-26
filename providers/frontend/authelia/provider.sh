@@ -146,11 +146,15 @@ USERSEOF
     fi
   fi
 
-  # Wait for app to be running
+  # Wait for app to be running.
+  # Note: Cannot use provider_is_running here because load_directory_provider
+  # above may have overridden it with the LLDAP version. Check Dokku directly.
   echo "-----> Waiting for Authelia to be ready"
   local retries=30
   while [[ $retries -gt 0 ]]; do
-    if provider_is_running "$SERVICE"; then
+    local RUNNING
+    RUNNING=$("$DOKKU_BIN" ps:report "$APP_NAME" --running < /dev/null 2>/dev/null || echo "false")
+    if [[ "$RUNNING" == "true" ]]; then
       break
     fi
     sleep 2
@@ -159,7 +163,7 @@ USERSEOF
 
   if [[ $retries -eq 0 ]]; then
     echo "!     Authelia failed to start" >&2
-    "$DOKKU_BIN" logs "$APP_NAME" --num 10 < /dev/null 2>&1 >&2
+    "$DOKKU_BIN" logs "$APP_NAME" --num 20 < /dev/null 2>&1 >&2 || true
     return 1
   fi
 }
@@ -447,9 +451,12 @@ provider_verify() {
     return 1
   fi
 
+  # Check directly via Dokku (provider_is_running may be overridden by directory provider)
   local retries=15
   while [[ $retries -gt 0 ]]; do
-    if provider_is_running "$SERVICE"; then
+    local RUNNING
+    RUNNING=$("$DOKKU_BIN" ps:report "$APP_NAME" --running < /dev/null 2>/dev/null || echo "false")
+    if [[ "$RUNNING" == "true" ]]; then
       echo "       App $APP_NAME is running"
       return 0
     fi
