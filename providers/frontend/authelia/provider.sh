@@ -61,6 +61,7 @@ provider_create_container() {
   # Create users.yml if using file-based auth (no LDAP linked)
   # Authelia v4.39+ crashes fatally if users.yml is missing or empty
   if [[ ! -f "$SERVICE_ROOT/DIRECTORY" ]] && [[ ! -f "$DATA_DIR/users.yml" ]]; then
+    # shellcheck disable=SC2016  # Dollar signs in password hash are literal
     safe_write "$DATA_DIR/users.yml" 'users:
   placeholder:
     disabled: true
