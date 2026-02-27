@@ -28,6 +28,16 @@ describe('Plugin Configuration', () => {
     }
   });
 
+  it('should have frontend subcommands', () => {
+    const subcommands = [
+      'frontend_create', 'frontend_destroy', 'frontend_list', 'frontend_info',
+      'frontend_protect', 'frontend_unprotect', 'frontend_refresh',
+    ];
+    for (const cmd of subcommands) {
+      expect(existsSync(join(PLUGIN_DIR, `subcommands/${cmd}`))).toBe(true);
+    }
+  });
+
   it('commands file should be executable', () => {
     const result = execSync(`test -x ${join(PLUGIN_DIR, 'commands')} && echo yes || echo no`, {
       encoding: 'utf-8'

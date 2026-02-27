@@ -159,6 +159,14 @@ export default defineConfig({
       timeout: 600000, // 10 minutes
     },
 
+    // Protect / Unprotect / Refresh tests
+    {
+      name: 'protect-unprotect',
+      testMatch: ['protect-unprotect.spec.ts'],
+      use: { ...devices['Desktop Chrome'] },
+      timeout: 600000, // 10 minutes (creates frontend service)
+    },
+
     // Radarr forward auth tests (Authelia protecting Radarr)
     {
       name: 'radarr-forward-auth',

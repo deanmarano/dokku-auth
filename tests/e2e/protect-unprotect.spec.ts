@@ -6,13 +6,14 @@ import {
 } from './helpers';
 
 /**
- * Protect / Unprotect E2E Tests
+ * Protect / Unprotect / Refresh E2E Tests
  *
  * Tests:
  * - sso:protect <app>        (auto-detect single frontend)
  * - sso:unprotect <app>      (auto-detect which frontend protects app)
  * - sso:frontend:protect <service> <app>   (explicit frontend)
  * - sso:frontend:unprotect <service> <app> (explicit frontend)
+ * - sso:frontend:refresh <service>         (re-apply all links)
  * - Error cases: no frontend, app not found, idempotency
  */
 
@@ -21,7 +22,7 @@ const FRONTEND_SERVICE = 'protect-fe-test';
 const TEST_APP = 'protect-test-app';
 const TEST_APP_2 = 'protect-test-app2';
 
-test.describe('Protect / Unprotect', () => {
+test.describe('Protect / Unprotect / Refresh', () => {
   test.beforeAll(async () => {
     console.log('=== Setting up protect/unprotect test environment ===');
 
@@ -90,9 +91,10 @@ test.describe('Protect / Unprotect', () => {
     expect(output).toContain('now protected');
   });
 
-  test('sso:frontend:protect should be idempotent', async () => {
+  test('sso:frontend:protect should be idempotent (re-applies without error)', async () => {
     const output = dokku(`sso:frontend:protect ${FRONTEND_SERVICE} ${TEST_APP}`);
-    expect(output).toContain('already protected');
+    expect(output).toContain('Protecting');
+    expect(output).toContain('now protected');
   });
 
   test('sso:frontend:info should show protected app', async () => {
@@ -120,9 +122,10 @@ test.describe('Protect / Unprotect', () => {
     expect(output).toContain('now protected');
   });
 
-  test('sso:protect should be idempotent', async () => {
+  test('sso:protect should be idempotent (re-applies without error)', async () => {
     const output = dokku(`sso:protect ${TEST_APP}`);
-    expect(output).toContain('already protected');
+    expect(output).toContain('Protecting');
+    expect(output).toContain('now protected');
   });
 
   test('sso:unprotect should auto-detect protecting frontend', async () => {
@@ -150,6 +153,56 @@ test.describe('Protect / Unprotect', () => {
     // Cleanup
     dokku(`sso:unprotect ${TEST_APP}`);
     dokku(`sso:unprotect ${TEST_APP_2}`);
+  });
+
+  // --- sso:frontend:refresh ---
+
+  test('sso:frontend:refresh should re-apply protection to all linked apps', async () => {
+    // Protect both apps
+    dokku(`sso:frontend:protect ${FRONTEND_SERVICE} ${TEST_APP}`);
+    dokku(`sso:frontend:protect ${FRONTEND_SERVICE} ${TEST_APP_2}`);
+
+    // Refresh should re-apply both
+    const output = dokku(`sso:frontend:refresh ${FRONTEND_SERVICE}`);
+    expect(output).toContain('Refreshing SSO protection');
+    expect(output).toContain(TEST_APP);
+    expect(output).toContain(TEST_APP_2);
+    expect(output).toContain('All apps refreshed');
+
+    // Cleanup
+    dokku(`sso:frontend:unprotect ${FRONTEND_SERVICE} ${TEST_APP}`);
+    dokku(`sso:frontend:unprotect ${FRONTEND_SERVICE} ${TEST_APP_2}`);
+  });
+
+  test('sso:frontend:refresh with no protected apps should be no-op', async () => {
+    const output = dokku(`sso:frontend:refresh ${FRONTEND_SERVICE}`);
+    expect(output).toContain('No protected apps');
+  });
+
+  test('sso:frontend:refresh should skip destroyed apps', async () => {
+    // Protect an app then destroy it
+    dokku(`sso:frontend:protect ${FRONTEND_SERVICE} ${TEST_APP}`);
+    dokku(`apps:destroy ${TEST_APP} --force`);
+
+    // Refresh should skip the destroyed app
+    const output = dokku(`sso:frontend:refresh ${FRONTEND_SERVICE}`);
+    expect(output).toContain('Skipping');
+    expect(output).toContain('no longer exists');
+
+    // Recreate the app for other tests
+    dokku(`apps:create ${TEST_APP}`);
+
+    // Cleanup
+    dokku(`sso:frontend:unprotect ${FRONTEND_SERVICE} ${TEST_APP}`);
+  });
+
+  test('sso:frontend:refresh should fail for non-existent service', async () => {
+    try {
+      dokku(`sso:frontend:refresh no-such-service`, { quiet: true });
+      expect(true).toBe(false);
+    } catch (e: any) {
+      expect(e.stderr).toContain('does not exist');
+    }
   });
 
   // --- Error cases ---
