@@ -477,10 +477,38 @@ jobs:
       - name: Collect logs on failure
         if: failure()
         run: |
-          echo "=== Docker containers ===" && docker ps -a
-          echo "=== Auth services ===" && sudo dokku sso:list 2>/dev/null || true
-          echo "=== oauth2-proxy logs ===" && docker logs oauth2-proxy-test 2>&1 || true
-          echo "=== Authelia logs ===" && sudo dokku sso:frontend:logs oidc-app-frontend-test -n 100 2>/dev/null || true
+          echo "=== Docker containers ==="
+          docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}"
+          echo ""
+          echo "=== Directory services ==="
+          sudo dokku sso:list 2>/dev/null || true
+          echo ""
+          echo "=== Frontend services ==="
+          sudo dokku sso:frontend:list 2>/dev/null || true
+          echo ""
+          echo "=== Frontend info ==="
+          sudo dokku sso:frontend:info oidc-app-frontend-test 2>/dev/null || true
+          echo ""
+          echo "=== APP_NAME file ==="
+          sudo cat /var/lib/dokku/services/sso/frontend/oidc-app-frontend-test/APP_NAME 2>/dev/null || echo "(not found)"
+          echo ""
+          echo "=== SSO network containers ==="
+          docker network inspect dokku.sso.network --format='{{range .Containers}}{{.Name}} ({{.IPv4Address}}) {{end}}' 2>/dev/null || echo "(network not found)"
+          echo ""
+          echo "=== Authelia Dokku app logs ==="
+          sudo dokku sso:frontend:logs oidc-app-frontend-test -n 100 2>/dev/null || true
+          echo ""
+          echo "=== Authelia app logs (direct) ==="
+          sudo dokku logs authelia -n 50 2>/dev/null || true
+          echo ""
+          echo "=== oauth2-proxy logs ==="
+          docker logs oauth2-proxy-test 2>&1 | tail -80 || true
+          echo ""
+          echo "=== nginx-tls-proxy logs ==="
+          docker logs nginx-tls-proxy 2>&1 | tail -40 || true
+          echo ""
+          echo "=== Dokku apps ==="
+          sudo dokku apps:list 2>/dev/null || true
 
   e2e-grafana-ldap:
     name: E2E - Grafana LDAP

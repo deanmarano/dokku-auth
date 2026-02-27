@@ -82,23 +82,62 @@ export function getDirectoryContainerId(serviceName: string): string {
   return `dokku.sso.directory.${serviceName}`;
 }
 
+/**
+ * Get the running container ID for a frontend service.
+ * Reads the APP_NAME from the service directory, then finds the container by Dokku label.
+ */
+export function getFrontendContainerId(serviceName: string): string {
+  // Read the Dokku app name from the service directory
+  let appName: string;
+  try {
+    const cmd = USE_SUDO
+      ? `sudo cat /var/lib/dokku/services/sso/frontend/${serviceName}/APP_NAME`
+      : `cat /var/lib/dokku/services/sso/frontend/${serviceName}/APP_NAME`;
+    appName = execSync(cmd, { encoding: 'utf-8' }).trim();
+  } catch {
+    // Default app name for authelia provider
+    appName = 'authelia';
+  }
+
+  const containerId = execSync(
+    `docker ps -q -f "label=com.dokku.app-name=${appName}" -f status=running | head -1`,
+    { encoding: 'utf-8' },
+  ).trim();
+
+  if (!containerId) {
+    throw new Error(
+      `No running container for frontend service ${serviceName} (app: ${appName}). ` +
+      `Running containers: ${execSync('docker ps --format "{{.Names}}"', { encoding: 'utf-8' }).trim()}`
+    );
+  }
+  return containerId;
+}
+
 /** Get the IP address of a Docker container, optionally for a specific network. */
-export function getContainerIp(containerName: string, network?: string): string {
+export function getContainerIp(containerNameOrId: string, network?: string): string {
   try {
     if (network) {
       const ip = execSync(
-        `docker inspect -f '{{(index .NetworkSettings.Networks "${network}").IPAddress}}' ${containerName}`,
+        `docker inspect -f '{{(index .NetworkSettings.Networks "${network}").IPAddress}}' ${containerNameOrId}`,
         { encoding: 'utf-8' },
       ).trim();
       if (ip) return ip;
     }
     const ips = execSync(
-      `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' ${containerName}`,
+      `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' ${containerNameOrId}`,
       { encoding: 'utf-8' },
     ).trim();
     return ips.split(' ')[0];
   } catch {
-    throw new Error(`Could not get IP for container ${containerName}`);
+    // Dump debugging info before failing
+    try {
+      console.error(`[getContainerIp] Failed for "${containerNameOrId}" (network: ${network || 'any'})`);
+      console.error('[getContainerIp] Running containers:', execSync('docker ps --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"', { encoding: 'utf-8' }).trim());
+      if (network) {
+        console.error(`[getContainerIp] Network ${network}:`, execSync(`docker network inspect ${network} --format='{{range .Containers}}{{.Name}} {{end}}'`, { encoding: 'utf-8' }).trim());
+      }
+    } catch {}
+    throw new Error(`Could not get IP for container ${containerNameOrId}`);
   }
 }
 

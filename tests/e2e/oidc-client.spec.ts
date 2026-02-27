@@ -5,6 +5,7 @@ import {
   dokku,
   getContainerIp,
   getDirectoryContainerId,
+  getFrontendContainerId,
   getLdapCredentials,
   waitForHealthy,
 } from './helpers';
@@ -114,8 +115,9 @@ test.describe('OIDC Client Integration', () => {
       console.log('Warning: Authelia may not be fully healthy');
     }
 
-    // Get Authelia container IP
-    const autheliaContainerIp = getContainerIp(`dokku.sso.frontend.${FRONTEND_SERVICE}`, 'dokku.sso.network');
+    // Get Authelia container IP via Dokku app name
+    const autheliaContainerId = getFrontendContainerId(FRONTEND_SERVICE);
+    const autheliaContainerIp = getContainerIp(autheliaContainerId, 'dokku.sso.network');
     AUTHELIA_URL = `http://${autheliaContainerIp}:9091`;
     console.log(`Authelia URL: ${AUTHELIA_URL}`);
 

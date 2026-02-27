@@ -6,6 +6,7 @@ import {
   dokku,
   getContainerIp,
   getDirectoryContainerId,
+  getFrontendContainerId,
   getLdapCredentials,
   createLdapUser,
   waitForHealthy,
@@ -168,18 +169,34 @@ test.describe('OIDC Application Browser Flow', () => {
     console.log('Waiting for Authelia to be ready...');
     await new Promise((r) => setTimeout(r, 5000));
 
+    // Dump state for debugging
+    try {
+      console.log('Frontend info:', dokku(`sso:frontend:info ${FRONTEND_SERVICE}`, { quiet: true }));
+      console.log('Docker containers:', execSync('docker ps --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}"', { encoding: 'utf-8' }).trim());
+    } catch (e: any) {
+      console.log('Debug info failed:', e.message);
+    }
+
     const autheliaHealthy = await waitForHealthy(FRONTEND_SERVICE, 'frontend', 120000);
     if (!autheliaHealthy) {
       try {
         const logs = dokku(`sso:frontend:logs ${FRONTEND_SERVICE} -n 50`);
         console.log('Authelia logs:', logs);
       } catch {}
+      try {
+        console.log('All containers:', execSync('docker ps -a --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"', { encoding: 'utf-8' }).trim());
+        console.log('SSO network:', execSync("docker network inspect dokku.sso.network --format='{{range .Containers}}{{.Name}} {{end}}'", { encoding: 'utf-8' }).trim());
+      } catch {}
       throw new Error('Authelia not healthy');
     }
 
     // Get Authelia container IP for internal communication
-    const autheliaContainerName = `dokku.sso.frontend.${FRONTEND_SERVICE}`;
-    AUTHELIA_INTERNAL_IP = getContainerIp(autheliaContainerName, 'dokku.sso.network');
+    // Use the Dokku app name (stored in APP_NAME file), not the service name,
+    // because the Docker container is labeled with the Dokku app name.
+    console.log('Looking up Authelia container...');
+    const autheliaContainerId = getFrontendContainerId(FRONTEND_SERVICE);
+    console.log(`Authelia container ID: ${autheliaContainerId}`);
+    AUTHELIA_INTERNAL_IP = getContainerIp(autheliaContainerId, 'dokku.sso.network');
     console.log(`Authelia internal IP: ${AUTHELIA_INTERNAL_IP}`);
 
     // 7. Create test user in LLDAP
