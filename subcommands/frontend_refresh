@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
+source "$PLUGIN_BASE_PATH/providers/loader.sh"
+
+# Strip command prefix if dokku passed it
+[[ "${1:-}" == sso:* ]] && shift
+
+SERVICE="$1"
+
+if [[ -z "$SERVICE" ]]; then
+  echo "Usage: dokku sso:frontend:refresh <service>" >&2
+  echo "" >&2
+  echo "Re-apply SSO protection to all linked apps." >&2
+  echo "Use after recreating the frontend service or to fix broken nginx configs." >&2
+  exit 1
+fi
+
+SERVICE_ROOT="$PLUGIN_DATA_ROOT/frontend/$SERVICE"
+
+if ! frontend_service_exists "$SERVICE"; then
+  echo "!     Service $SERVICE does not exist" >&2
+  exit 1
+fi
+
+if [[ ! -s "$SERVICE_ROOT/PROTECTED" ]]; then
+  echo "       No protected apps for service $SERVICE"
+  exit 0
+fi
+
+load_frontend_provider "$SERVICE"
+
+echo "-----> Refreshing SSO protection for all apps"
+
+FAILED=0
+while IFS= read -r app; do
+  [[ -z "$app" ]] && continue
+  if ! "$DOKKU_BIN" apps:exists "$app" < /dev/null 2>/dev/null; then
+    echo "!     Skipping $app (app no longer exists)" >&2
+    continue
+  fi
+  echo "       Refreshing $app..."
+  if ! provider_protect_app "$SERVICE" "$app"; then
+    echo "!     Failed to refresh $app" >&2
+    FAILED=$((FAILED + 1))
+  fi
+done < "$SERVICE_ROOT/PROTECTED"
+
+if [[ $FAILED -gt 0 ]]; then
+  echo "!     $FAILED app(s) failed to refresh" >&2
+  exit 1
+fi
+
+echo "-----> All apps refreshed"

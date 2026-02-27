@@ -30,18 +30,11 @@ if ! "$DOKKU_BIN" apps:exists "$APP" < /dev/null 2>/dev/null; then
   exit 1
 fi
 
-# Check if already protected
-if [[ -f "$SERVICE_ROOT/PROTECTED" ]] && grep -q "^${APP}$" "$SERVICE_ROOT/PROTECTED"; then
-  echo "       App $APP is already protected by $SERVICE"
-  exit 0
-fi
-
+# Protect (or re-protect) the app — idempotent so it can refresh nginx
+# configs after Authelia is recreated
 echo "-----> Protecting $APP with $SERVICE"
 
 load_frontend_provider "$SERVICE"
 provider_protect_app "$SERVICE" "$APP"
 
 echo "-----> App $APP is now protected"
-echo ""
-echo "       Note: You may need to configure your nginx proxy to use Authelia"
-echo "       for forward authentication. See documentation for details."

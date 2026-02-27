@@ -57,6 +57,7 @@ dokku sso:frontend commands:
     sso:frontend:use-directory <svc> <dir-svc>  link frontend to directory
     sso:frontend:protect <service> <app>        add SSO protection to app
     sso:frontend:unprotect <service> <app>      remove SSO protection
+    sso:frontend:refresh <service>              re-apply protection to all linked apps
 
     sso:frontend:provider:set <service> <prov>  set frontend provider
     sso:frontend:provider:config <svc> KEY=val  configure provider settings
