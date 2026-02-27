@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 # Provider loader - sources the appropriate provider based on service config
 
+# Write content to a file atomically, handling root-owned files.
+# Uses temp file + mv so only directory write permission is needed,
+# not write permission on the existing file itself.
+# Arguments: FILE CONTENT [MODE]
+safe_write() {
+  local FILE="$1"
+  local CONTENT="$2"
+  local MODE="${3:-0600}"
+  local TMP
+  TMP=$(mktemp "$(dirname "$FILE")/$(basename "$FILE").XXXXXX")
+  echo "$CONTENT" > "$TMP"
+  chmod "$MODE" "$TMP"
+  mv -f "$TMP" "$FILE"
+}
+
 # Load a directory provider for a service
 load_directory_provider() {
   local SERVICE="$1"

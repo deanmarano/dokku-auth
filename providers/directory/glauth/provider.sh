@@ -41,7 +41,7 @@ provider_create_container() {
   APP_NAME=$(get_directory_app_name "$SERVICE")
   if [[ -z "$APP_NAME" ]]; then
     APP_NAME="dokku-sso-dir-$SERVICE"
-    echo "$APP_NAME" > "$SERVICE_ROOT/APP_NAME"
+    safe_write "$SERVICE_ROOT/APP_NAME" "$APP_NAME"
   fi
 
   # Generate configuration
@@ -51,12 +51,13 @@ provider_create_container() {
 
   # Save configuration
   mkdir -p "$CONFIG_DIR" "$DATA_DIR"
-  echo "$BASE_DN" > "$CONFIG_DIR/BASE_DN"
-  echo "$ADMIN_PASSWORD" > "$CONFIG_DIR/ADMIN_PASSWORD"
-  chmod 600 "$CONFIG_DIR"/*
+  safe_write "$CONFIG_DIR/BASE_DN" "$BASE_DN"
+  safe_write "$CONFIG_DIR/ADMIN_PASSWORD" "$ADMIN_PASSWORD"
 
-  # Generate GLAuth config file
-  cat > "$CONFIG_DIR/glauth.cfg" <<EOF
+  # Generate GLAuth config file atomically (temp + mv to handle root-owned files)
+  local CONFIG_TMP
+  CONFIG_TMP=$(mktemp "$CONFIG_DIR/glauth.cfg.XXXXXX")
+  cat > "$CONFIG_TMP" <<EOF
 [ldap]
   enabled = true
   listen = "0.0.0.0:3893"
@@ -88,7 +89,8 @@ provider_create_container() {
   name = "$DEFAULT_USERS_GROUP"
   gidnumber = 5502
 EOF
-  chmod 600 "$CONFIG_DIR/glauth.cfg"
+  chmod 600 "$CONFIG_TMP"
+  mv -f "$CONFIG_TMP" "$CONFIG_DIR/glauth.cfg"
 
   # Create Dokku app if it doesn't exist
   if ! "$DOKKU_BIN" apps:exists "$APP_NAME" < /dev/null 2>/dev/null; then
@@ -140,7 +142,7 @@ provider_adopt_app() {
   fi
 
   # Store app name
-  echo "$APP_NAME" > "$SERVICE_ROOT/APP_NAME"
+  safe_write "$SERVICE_ROOT/APP_NAME" "$APP_NAME"
 
   # Attach to SSO network
   "$DOKKU_BIN" network:set "$APP_NAME" attach-post-deploy "$SSO_NETWORK" < /dev/null

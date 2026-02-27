@@ -25,7 +25,7 @@ provider_create_container() {
   APP_NAME=$(get_frontend_app_name "$SERVICE")
   if [[ -z "$APP_NAME" ]]; then
     APP_NAME="authelia"
-    echo "$APP_NAME" > "$SERVICE_ROOT/APP_NAME"
+    safe_write "$SERVICE_ROOT/APP_NAME" "$APP_NAME"
   fi
 
   # Read or generate configuration
@@ -38,14 +38,11 @@ provider_create_container() {
 
   # Save configuration
   mkdir -p "$CONFIG_DIR" "$DATA_DIR"
-  echo "$DOMAIN" > "$CONFIG_DIR/DOMAIN"
-  echo "$JWT_SECRET" > "$CONFIG_DIR/JWT_SECRET"
-  echo "$SESSION_SECRET" > "$CONFIG_DIR/SESSION_SECRET"
-  echo "$STORAGE_KEY" > "$CONFIG_DIR/STORAGE_KEY"
-  echo "$IDENTITY_VALIDATION_SECRET" > "$CONFIG_DIR/IDENTITY_VALIDATION_SECRET"
-  for f in "$CONFIG_DIR"/*; do
-    [[ -f "$f" ]] && [[ -O "$f" ]] && chmod 600 "$f"
-  done
+  safe_write "$CONFIG_DIR/DOMAIN" "$DOMAIN"
+  safe_write "$CONFIG_DIR/JWT_SECRET" "$JWT_SECRET"
+  safe_write "$CONFIG_DIR/SESSION_SECRET" "$SESSION_SECRET"
+  safe_write "$CONFIG_DIR/STORAGE_KEY" "$STORAGE_KEY"
+  safe_write "$CONFIG_DIR/IDENTITY_VALIDATION_SECRET" "$IDENTITY_VALIDATION_SECRET"
 
   # Get directory service info if linked
   local LDAP_URL LDAP_BASE_DN LDAP_BIND_DN LDAP_BIND_PASSWORD
@@ -64,15 +61,12 @@ provider_create_container() {
   # Create users.yml if using file-based auth (no LDAP linked)
   # Authelia v4.39+ crashes fatally if users.yml is missing or empty
   if [[ ! -f "$SERVICE_ROOT/DIRECTORY" ]] && [[ ! -f "$DATA_DIR/users.yml" ]]; then
-    cat > "$DATA_DIR/users.yml" <<'USERSEOF'
-users:
+    safe_write "$DATA_DIR/users.yml" 'users:
   placeholder:
     disabled: true
     displayname: "Placeholder"
     email: placeholder@localhost
-    password: "$argon2id$v=19$m=65536,t=3,p=4$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-USERSEOF
-    chmod 644 "$DATA_DIR/users.yml"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"' "0644"
   fi
 
   # Authelia container runs as non-root (UID 8000 since v4.38+).
@@ -111,7 +105,7 @@ USERSEOF
   # Authelia v4.39+ requires HTTPS for authelia_url/session cookies, so the
   # Dokku app must serve HTTPS. Without a cert, session cookies (Secure flag)
   # won't work and browser logins fail silently.
-  if ! "$DOKKU_BIN" certs:report "$APP_NAME" < /dev/null 2>/dev/null | grep -q "has info.*true"; then
+  if ! "$DOKKU_BIN" certs:report "$APP_NAME" < /dev/null 2>/dev/null | grep -qi "ssl cert present.*true"; then
     echo "-----> Generating self-signed TLS certificate for $DOMAIN"
     local CERT_DIR
     CERT_DIR=$(mktemp -d)
@@ -138,19 +132,11 @@ USERSEOF
   # Deploy from image or restart container if already deployed
   echo "-----> Deploying $PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION"
   if "$DOKKU_BIN" ps:report "$APP_NAME" --deployed < /dev/null 2>/dev/null | grep -q "true"; then
-    # Config is bind-mounted — just restart the Docker container directly.
-    # Dokku's ps:restart/ps:rebuild do a full redeploy with healthchecks which
-    # can fail during the transition. A direct docker restart is sufficient
-    # since only the config file changed, not the image.
-    echo "       App already deployed, restarting container..."
-    local CONTAINER_ID
-    CONTAINER_ID=$(docker ps -q -f "label=com.dokku.app-name=$APP_NAME" 2>/dev/null | head -1 || true)
-    if [[ -n "$CONTAINER_ID" ]]; then
-      docker restart "$CONTAINER_ID" 2>/dev/null || true
-    else
-      # Fallback: try ps:restart if we can't find the container
-      "$DOKKU_BIN" ps:restart "$APP_NAME" < /dev/null || true
-    fi
+    # Use ps:rebuild (not docker restart) so that network changes
+    # (attach-post-create) are picked up in the new container.
+    # Config is bind-mounted so a rebuild is safe.
+    echo "       App already deployed, rebuilding with updated config..."
+    "$DOKKU_BIN" ps:rebuild "$APP_NAME" < /dev/null
   else
     if ! "$DOKKU_BIN" git:from-image "$APP_NAME" "$PROVIDER_IMAGE:$PROVIDER_IMAGE_VERSION" < /dev/null; then
       echo "!     Deployment failed — capturing container logs:" >&2
@@ -200,14 +186,14 @@ provider_adopt_app() {
   fi
 
   # Store app name
-  echo "$APP_NAME" > "$SERVICE_ROOT/APP_NAME"
+  safe_write "$SERVICE_ROOT/APP_NAME" "$APP_NAME"
 
   # Read domain from the Dokku app
   local DOMAIN
   DOMAIN=$("$DOKKU_BIN" domains:report "$APP_NAME" --domains-app-vhosts < /dev/null 2>/dev/null || true)
   if [[ -n "$DOMAIN" ]]; then
     mkdir -p "$CONFIG_DIR"
-    echo "$DOMAIN" > "$CONFIG_DIR/DOMAIN"
+    safe_write "$CONFIG_DIR/DOMAIN" "$DOMAIN"
     echo "       Domain: $DOMAIN"
   fi
 
@@ -370,8 +356,7 @@ EOF
   if [[ -f "$CONFIG_DIR/OIDC_ENABLED" ]] && [[ "$(cat "$CONFIG_DIR/OIDC_ENABLED")" == "true" ]]; then
     local OIDC_HMAC_SECRET OIDC_PRIVATE_KEY
     OIDC_HMAC_SECRET=$(cat "$CONFIG_DIR/OIDC_HMAC_SECRET" 2>/dev/null || openssl rand -hex 32)
-    echo "$OIDC_HMAC_SECRET" > "$CONFIG_DIR/OIDC_HMAC_SECRET"
-    chmod 600 "$CONFIG_DIR/OIDC_HMAC_SECRET"
+    safe_write "$CONFIG_DIR/OIDC_HMAC_SECRET" "$OIDC_HMAC_SECRET"
 
     # Generate RSA key if not exists
     if [[ ! -f "$CONFIG_DIR/oidc_private_key.pem" ]]; then
@@ -522,7 +507,7 @@ provider_use_directory() {
     return 1
   fi
 
-  echo "$DIRECTORY_SERVICE" > "$SERVICE_ROOT/DIRECTORY"
+  safe_write "$SERVICE_ROOT/DIRECTORY" "$DIRECTORY_SERVICE"
 
   # Regenerate config
   generate_authelia_config "$SERVICE"
@@ -628,7 +613,7 @@ provider_enable_oidc() {
   local SERVICE_ROOT="$PLUGIN_DATA_ROOT/frontend/$SERVICE"
   local CONFIG_DIR="$SERVICE_ROOT/config"
 
-  echo "true" > "$CONFIG_DIR/OIDC_ENABLED"
+  safe_write "$CONFIG_DIR/OIDC_ENABLED" "true"
   mkdir -p "$CONFIG_DIR/oidc_clients"
 
   # Regenerate config
@@ -641,7 +626,7 @@ provider_disable_oidc() {
   local SERVICE_ROOT="$PLUGIN_DATA_ROOT/frontend/$SERVICE"
   local CONFIG_DIR="$SERVICE_ROOT/config"
 
-  echo "false" > "$CONFIG_DIR/OIDC_ENABLED"
+  safe_write "$CONFIG_DIR/OIDC_ENABLED" "false"
 
   # Regenerate config
   generate_authelia_config "$SERVICE"

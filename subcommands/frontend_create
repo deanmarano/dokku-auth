@@ -91,7 +91,7 @@ echo "-----> Creating frontend SSO service $SERVICE (provider: $PROVIDER)"
 
 # Create service directory (idempotent for adopt case)
 mkdir -p "$SERVICE_ROOT/config" "$SERVICE_ROOT/data"
-echo "$PROVIDER" > "$SERVICE_ROOT/PROVIDER"
+safe_write "$SERVICE_ROOT/PROVIDER" "$PROVIDER"
 
 # Link directory service if specified (before provider load so config includes LDAP)
 if [[ -n "$DIRECTORY" ]]; then
@@ -99,7 +99,7 @@ if [[ -n "$DIRECTORY" ]]; then
     echo "!     Directory service $DIRECTORY does not exist" >&2
     exit 1
   fi
-  echo "$DIRECTORY" > "$SERVICE_ROOT/DIRECTORY"
+  safe_write "$SERVICE_ROOT/DIRECTORY" "$DIRECTORY"
   echo "-----> Linking to directory service $DIRECTORY"
 fi
 

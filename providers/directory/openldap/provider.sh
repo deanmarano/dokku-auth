@@ -41,7 +41,7 @@ provider_create_container() {
   APP_NAME=$(get_directory_app_name "$SERVICE")
   if [[ -z "$APP_NAME" ]]; then
     APP_NAME="dokku-sso-dir-$SERVICE"
-    echo "$APP_NAME" > "$SERVICE_ROOT/APP_NAME"
+    safe_write "$SERVICE_ROOT/APP_NAME" "$APP_NAME"
   fi
 
   # Generate configuration
@@ -53,11 +53,10 @@ provider_create_container() {
 
   # Save configuration
   mkdir -p "$CONFIG_DIR" "$DATA_DIR/slapd" "$DATA_DIR/config"
-  echo "$BASE_DN" > "$CONFIG_DIR/BASE_DN"
-  echo "$ADMIN_PASSWORD" > "$CONFIG_DIR/ADMIN_PASSWORD"
-  echo "$ORGANISATION" > "$CONFIG_DIR/ORGANISATION"
-  echo "$DOMAIN" > "$CONFIG_DIR/DOMAIN"
-  chmod 600 "$CONFIG_DIR"/*
+  safe_write "$CONFIG_DIR/BASE_DN" "$BASE_DN"
+  safe_write "$CONFIG_DIR/ADMIN_PASSWORD" "$ADMIN_PASSWORD"
+  safe_write "$CONFIG_DIR/ORGANISATION" "$ORGANISATION"
+  safe_write "$CONFIG_DIR/DOMAIN" "$DOMAIN"
 
   # Create Dokku app if it doesn't exist
   if ! "$DOKKU_BIN" apps:exists "$APP_NAME" < /dev/null 2>/dev/null; then
@@ -157,7 +156,7 @@ provider_adopt_app() {
   fi
 
   # Store app name
-  echo "$APP_NAME" > "$SERVICE_ROOT/APP_NAME"
+  safe_write "$SERVICE_ROOT/APP_NAME" "$APP_NAME"
 
   # Attach to SSO network
   "$DOKKU_BIN" network:set "$APP_NAME" attach-post-deploy "$SSO_NETWORK" < /dev/null
